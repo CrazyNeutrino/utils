@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<persistence version="2.0"
+	xmlns="http://java.sun.com/xml/ns/persistence" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="http://java.sun.com/xml/ns/persistence http://java.sun.com/xml/ns/persistence/persistence_2_0.xsd">
+	<persistence-unit name="conquest-pu" transaction-type="RESOURCE_LOCAL">
+		<provider>org.hibernate.jpa.HibernatePersistenceProvider</provider>
+
+		<class>org.meb.oneringdb.db.model.DomainBase</class>
+		<class>org.meb.oneringdb.db.model.DomainLang</class>
+		<class>org.meb.oneringdb.db.model.CycleBase</class>
+		<class>org.meb.oneringdb.db.model.CycleLang</class>
+		<class>org.meb.oneringdb.db.model.CardSetBase</class>
+		<class>org.meb.oneringdb.db.model.CardSetLang</class>
+		<class>org.meb.oneringdb.db.model.EncounterSetBase</class>
+		<class>org.meb.oneringdb.db.model.EncounterSetLang</class>
+		<class>org.meb.oneringdb.db.model.ScenarioBase</class>
+		<class>org.meb.oneringdb.db.model.ScenarioLang</class>
+		<class>org.meb.oneringdb.db.model.ScenEnstLink</class>
+		<class>org.meb.oneringdb.db.model.CardBase</class>
+		<class>org.meb.oneringdb.db.model.CardLang</class>
+		
+		<class>org.meb.oneringdb.db.model.loc.Domain</class>
+		<class>org.meb.oneringdb.db.model.loc.Cycle</class>
+		<class>org.meb.oneringdb.db.model.loc.CardSet</class>
+		<class>org.meb.oneringdb.db.model.loc.EncounterSet</class>
+		<class>org.meb.oneringdb.db.model.loc.Scenario</class>
+		<class>org.meb.oneringdb.db.model.loc.Card</class>
+		
+		<class>org.meb.oneringdb.db.model.User</class>
+		<class>org.meb.oneringdb.db.model.UserSession</class>
+		<class>org.meb.oneringdb.db.model.UserContribSummary</class>
+		
+		<class>org.meb.oneringdb.db.model.Deck</class>
+		<class>org.meb.oneringdb.db.model.DeckMember</class>
+		<class>org.meb.oneringdb.db.model.DeckLink</class>
+		<class>org.meb.oneringdb.db.model.DeckComment</class>
+		<class>org.meb.oneringdb.db.model.DeckInterest</class>
+
+		<properties>
+			<property name="hibernate.connection.driver_class" value="com.mysql.jdbc.Driver" />
+			<property name="hibernate.connection.username" value="lotrlcg_imp" />
+			<property name="hibernate.connection.password" value="glamdRING13-" />
+			<property name="hibernate.connection.url"
+				value="jdbc:mysql://localhost:3306/lotrlcg?useUnicode=true&amp;characterEncoding=utf8" />
+			<property name="hibernate.show_sql" value="true" />
+			<property name="hibernate.format_sql" value="true" />
+			<property name="hibernate.dialect" value="org.hibernate.dialect.MySQLDialect" />
+			<property name="hibernate.ejb.naming_strategy" value="org.hibernate.cfg.ImprovedNamingStrategy" />
+			<property name="hibernate.jdbc.use_get_generated_keys"
+				value="false" />
+			<!-- <property name="hibernate.archive.autodetection" value="class"/> -->
+		</properties>
+	</persistence-unit>
+</persistence>
