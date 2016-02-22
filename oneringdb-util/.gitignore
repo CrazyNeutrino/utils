@@ -1,1 +1,6 @@
 /target/
+/card.json
+/card3.json
+/.settings/
+/.classpath
+/.project
