@@ -62,7 +62,7 @@ public class DataLoader extends AbstractLoader {
 		}
 
 		RAW_BASE = DATA_BASE + "_raw/";
-		JSON_BASE = DATA_BASE + "json-current/";
+		JSON_BASE = DATA_BASE + "json-current2/";
 		if (!new File(JSON_BASE).exists()) {
 			new File(JSON_BASE).mkdir();
 		}

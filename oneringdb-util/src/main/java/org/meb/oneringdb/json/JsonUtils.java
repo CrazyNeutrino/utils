@@ -79,7 +79,7 @@ public class JsonUtils {
 		config.addMixInAnnotations(EncounterSetLang.class, JsonMixIn_StandardLang.class);
 		config.addMixInAnnotations(ScenarioBase.class, JsonMixIn_ScenarioBase.class);
 		config.addMixInAnnotations(ScenarioLang.class, JsonMixIn_StandardLang.class);
-		config.addMixInAnnotations(ScenEnstLink.class, JsonMixIn_ScenarioBase.class);
+		config.addMixInAnnotations(ScenEnstLink.class, JsonMixIn_ScenEnstLink.class);
 		config.addMixInAnnotations(CardBase.class, JsonMixIn_CardBase.class);
 		config.addMixInAnnotations(CardLang.class, JsonMixIn_CardLang.class);
 		config.addMixInAnnotations(CycleBase.class, JsonMixIn_CycleBase.class);
