@@ -40,7 +40,7 @@ public abstract class AbstractLoader {
 
 	private boolean globalRollback = true;
 
-	public AbstractLoader() {
+	protected void emInitialize() {
 		EntityManagerFactory emf = Persistence.createEntityManagerFactory("conquest-pu");
 		em = emf.createEntityManager();
 		dbDao = new DomainBaseDao(em);
@@ -50,6 +50,12 @@ public abstract class AbstractLoader {
 		esbDao = new EncounterSetBaseDao(em);
 		sbDao = new ScenarioBaseDao(em);
 		selDao = new ScenEnstLinkDao(em);
+	}
+	
+	protected void emFinalize() {
+		if (em != null) {
+			em.close();
+		}
 	}
 
 	protected void beginTransaction() {
@@ -70,10 +76,6 @@ public abstract class AbstractLoader {
 
 	protected void endTransaction() {
 		endTransaction(globalRollback);
-	}
-
-	protected void cleanUp() {
-		em.close();
 	}
 
 	public List<DomainBase> readDomainsFromDatabase() {

@@ -3,6 +3,7 @@ package org.meb.oneringdb.db;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
+import java.io.FileReader;
 import java.io.FilenameFilter;
 import java.io.IOException;
 import java.util.HashMap;
@@ -18,11 +19,15 @@ import org.apache.commons.collections4.Predicate;
 import org.apache.commons.collections4.Transformer;
 import org.apache.commons.io.IOUtils;
 import org.apache.commons.lang.StringUtils;
+import org.codehaus.jackson.JsonNode;
+import org.codehaus.jackson.JsonParser;
 import org.codehaus.jackson.JsonProcessingException;
 import org.meb.oneringdb.db.dao.JpaDao;
 import org.meb.oneringdb.db.model.CardBase;
 import org.meb.oneringdb.db.model.CardLang;
 import org.meb.oneringdb.db.model.CardSetBase;
+import org.meb.oneringdb.db.model.CardSetLang;
+import org.meb.oneringdb.db.model.CardSetType;
 import org.meb.oneringdb.db.model.CycleBase;
 import org.meb.oneringdb.db.model.DomainBase;
 import org.meb.oneringdb.db.model.DomainLang;
@@ -33,6 +38,7 @@ import org.meb.oneringdb.db.model.ScenEnstLink;
 import org.meb.oneringdb.db.model.ScenarioBase;
 import org.meb.oneringdb.db.model.loc.Card;
 import org.meb.oneringdb.db.query.CardQuery;
+import org.meb.oneringdb.db.util.Functions;
 import org.meb.oneringdb.db.util.JpaUtils;
 import org.meb.oneringdb.db.util.Utils;
 import org.meb.oneringdb.json.JsonUtils;
@@ -42,9 +48,13 @@ import org.w3c.dom.Document;
 import org.w3c.dom.Element;
 import org.w3c.dom.NodeList;
 
+import com.google.common.collect.Maps;
+
 import lombok.Setter;
 
 public class DataLoader extends AbstractLoader {
+
+	private static final Logger log = LoggerFactory.getLogger(DataLoader.class);
 
 	protected static final String DATA_BASE;
 	protected static final String JSON_BASE;
@@ -62,29 +72,34 @@ public class DataLoader extends AbstractLoader {
 		}
 
 		RAW_BASE = DATA_BASE + "_raw/";
-		JSON_BASE = DATA_BASE + "json-current2/";
+		JSON_BASE = DATA_BASE + "json-test/";
 		if (!new File(JSON_BASE).exists()) {
 			new File(JSON_BASE).mkdir();
 		}
 	}
 
-	private static final String DOMAIN_FILE_NAME = JSON_BASE + "domain.json";
-	private static final String CYCLE_FILE_NAME = JSON_BASE + "cycle.json";
-	private static final String CARD_SET_FILE_NAME = JSON_BASE + "card_set.json";
-	private static final String ENCOUNTER_SET_FILE_NAME = JSON_BASE + "encounter_set.json";
-	private static final String SCENARIO_FILE_NAME = JSON_BASE + "scenario.json";
-	private static final String SCEN_ENST_LINK_FILE_NAME = JSON_BASE + "scen_enst_link.json";
-	private static final String CARD_FILE_NAME = JSON_BASE + "card.json";
-	private static final boolean PROC_DOMAIN = Boolean.valueOf(System.getProperty("data.proc.domain"));
-	private static final boolean PROC_CYCLE = Boolean.valueOf(System.getProperty("data.proc.cycle"));
-	private static final boolean PROC_CARD_SET = Boolean.valueOf(System.getProperty("data.proc.cardset"));
-	private static final boolean PROC_ENCO_SET = Boolean.valueOf(System.getProperty("data.proc.encoset"));
-	private static final boolean PROC_SCENARIO = Boolean.valueOf(System.getProperty("data.proc.scenario"));
-	private static final boolean PROC_SCEN_ENST = Boolean.valueOf(System.getProperty("data.proc.scenenst"));
+	private static final String FILE_DOMAIN = JSON_BASE + "domain.json";
+	private static final String FILE_CYCLE = JSON_BASE + "cycle.json";
+	private static final String FILE_CARD_SET = JSON_BASE + "card_set.json";
+	private static final String FILE_ENCO_SET = JSON_BASE + "encounter_set.json";
+	private static final String FILE_SCENARIO = JSON_BASE + "scenario.json";
+	private static final String FILE_SCEN_ENST_LINK = JSON_BASE + "scen_enst_link.json";
+	private static final String FILE_CARD = JSON_BASE + "card.json";
+
+	private static final boolean PROC_DOMAIN = Boolean
+			.valueOf(System.getProperty("data.proc.domain"));
+	private static final boolean PROC_CYCLE = Boolean
+			.valueOf(System.getProperty("data.proc.cycle"));
+	private static final boolean PROC_CARD_SET = Boolean
+			.valueOf(System.getProperty("data.proc.cardset"));
+	private static final boolean PROC_ENCO_SET = Boolean
+			.valueOf(System.getProperty("data.proc.encoset"));
+	private static final boolean PROC_SCENARIO = Boolean
+			.valueOf(System.getProperty("data.proc.scenario"));
+	private static final boolean PROC_SCEN_ENST = Boolean
+			.valueOf(System.getProperty("data.proc.scenenst"));
 	private static final boolean PROC_CARD = Boolean.valueOf(System.getProperty("data.proc.card"));
 	private static final boolean DEV_ENV = Boolean.valueOf(System.getProperty("dev.env"));
-
-	private static final Logger log = LoggerFactory.getLogger(DataLoader.class);
 
 	@Setter
 	private boolean langItemsOnly = false;
@@ -96,8 +111,8 @@ public class DataLoader extends AbstractLoader {
 				loader.importDatabaseFromJson();
 			} else if (args[0].equals("--export-json")) {
 				loader.exportDatabaseToJson();
-			} else if (args[0].equals("--import-flat") && DEV_ENV) {
-				loader.importDomainsFromFlatFile();
+			} else if (args[0].equals("--update-sets-from-beorn")) {
+				loader.updateSetsFromBeorn();
 			} else if (args[0].equals("--rename") && DEV_ENV) {
 				loader.rename();
 			} else if (args[0].equals("--update-octgn-ids")) {
@@ -106,14 +121,477 @@ public class DataLoader extends AbstractLoader {
 				loader.updateOctgnTexts();
 			} else if (args[0].equals("--update-trait-keyword")) {
 				loader.updateTraitAndKeyword();
-			} else if (args[0].equals("--update-trait-keyword")) {
-				loader.updateTraitAndKeyword();
 			} else {
 				throw new IllegalArgumentException("Invalid argument");
 			}
 		} finally {
-			loader.cleanUp();
+			loader.emFinalize();
 		}
+	}
+
+	public void updateSetsFromBeorn() {
+		emInitialize();
+		
+		beginTransaction();
+
+		Map<String, CardSetType> typeMapping = new HashMap<>();
+		typeMapping.put("Core", CardSetType.CORE);
+		typeMapping.put("Adventure_Pack", CardSetType.AP);
+		typeMapping.put("Deluxe_Expansion", CardSetType.DELUXE);
+		typeMapping.put("Saga_Expansion", CardSetType.SAGA);
+		typeMapping.put("Nightmare_Expansion", CardSetType.ND);
+		typeMapping.put("GenCon_Expansion", CardSetType.GC);
+		typeMapping.put("GenConSaga_Expansion", CardSetType.GC_SAGA);
+		typeMapping.put("Fellowship_Deck", CardSetType.FD);
+		
+		StringBuilder myLog = new StringBuilder();
+
+		List<CardSetBase> csbList = readCardSetsFromDatabase();
+		Map<String, CardSetBase> csbMap = Maps.uniqueIndex(csbList, Functions.CardSetBaseTechName);
+
+		try {
+			JsonParser parser = JsonUtils
+					.createJsonParser(new FileReader(DATA_BASE + "beorn/sets.json"));
+			Iterator<JsonNode> jsonSetsIter = parser.readValueAsTree().getElements();
+			while (jsonSetsIter.hasNext()) {
+				JsonNode jsonSet = jsonSetsIter.next();
+				String name = jsonSet.get("Name").getTextValue();
+				String techName = Utils.toTechName(name);
+
+				String cycleName = jsonSet.get("Cycle").getTextValue();
+				if ("NIGHTMARE".equals(cycleName) || "GenCon".equals(cycleName)) {
+					cycleName = null;
+				}
+				String cycleTechName = null;
+				if (cycleName != null) {
+					cycleTechName = Utils.toTechName(cycleName);
+				}
+
+				String typeString = jsonSet.get("SetType").asText();
+				if (typeString.equals("CUSTOM")) {
+					continue;
+				}
+				CardSetType type = typeMapping.get(typeString);
+				if (type == null) {
+					throw new RuntimeException("No mapping for: " + typeString);
+				}
+
+				myLog.append(techName);
+				myLog.append(", ").append(cycleTechName);
+				myLog.append(", ").append(type);
+				myLog.append("\n");
+
+				if (csbMap.containsKey(techName)) {
+					myLog.append("exists").append("\n");
+					continue;
+				}
+				
+				CardSetBase csb = new CardSetBase();
+				csb.setTechName(techName);
+				csb.setTypeCode(type);
+				csb.setRecordState("A");
+				csb.setReleased(true);
+				
+				String langCode = "en";
+				CardSetLang csl = csb.getLangItems().get(langCode);
+				if (csl == null) {
+					csl = new CardSetLang();
+					csl.setBase(csb);
+					csb.getLangItems().put(langCode, csl);
+					csl.setLangCode(langCode);
+					csl.setName(name);
+					csl.setRecordState("A");
+				}
+				
+				if (cycleTechName != null) {
+					CycleBase ccb = ccbDao.findUnique(new CycleBase(cycleTechName));
+					if (ccb == null) {
+						throw new RuntimeException(
+								"Unable to find cycle for card set: " + csb.getTechName());
+					}
+					csb.setCycleBase(ccb);
+				}
+
+				myLog.append("persist").append("\n");
+				
+				em.persist(csb);
+				em.flush();
+			}
+			
+			endTransaction(false);
+		} catch (IOException e) {
+			endTransaction(true);
+			e.printStackTrace();
+		} finally {
+			log.info(myLog.toString());
+		}
+	}
+
+	private void rename() {
+		String dirName = DATA_BASE + "../image/_raw_/card/pl/galakta/04-zc";
+		File dir = new File(dirName);
+		String[] fileNames = dir.list(new FilenameFilter() {
+
+			@Override
+			public boolean accept(File dir, String name) {
+				// return name.matches("WL_[\\p{Digit}]{1,4}\\.((jpg)|(png))");
+				return name.matches("[\\p{Digit}]{1,3}[^b]+\\.(png)");
+			}
+		});
+
+		JpaDao<Card, CardQuery> dao = new JpaDao<>(em);
+		Card card = new Card();
+		card.setCrstTechName("zogworts-curse");
+		List<Card> cards = dao.find(card);
+		HashMap<Integer, Card> map = new HashMap<Integer, Card>();
+		MapUtils.populateMap(map, cards, new Transformer<Card, Integer>() {
+
+			@Override
+			public Integer transform(Card input) {
+				return input.getNumber();
+			}
+		});
+
+		for (String fileName : fileNames) {
+			int underscore = fileName.indexOf('_');
+			int dot = fileName.indexOf('.') - 1;
+			Integer number = Integer.valueOf(fileName.substring(0, 3));
+			String newFileName = StringUtils.leftPad(number.toString(), 3, '0') + "-"
+					+ map.get(number).getTechName();
+			if (fileName.endsWith("jpg")) {
+				newFileName += ".jpg";
+			} else if (fileName.endsWith("png")) {
+				newFileName += ".png";
+			}
+			System.out.println(fileName + " -> " + newFileName);
+			File file = new File(dir, fileName);
+			file.renameTo(new File(dir, newFileName));
+		}
+	}
+
+	public void importDatabaseFromJson() throws IOException {
+		emInitialize();
+
+		langItemsOnly = false;
+
+		beginTransaction();
+		if (PROC_DOMAIN) {
+			writeDomainsToDatabase();
+		}
+		if (PROC_CYCLE) {
+			writeCyclesToDatabase();
+		}
+		if (PROC_CARD_SET) {
+			writeCardSetsToDatabase();
+		}
+		if (PROC_ENCO_SET) {
+			writeEncounterSetsToDatabase();
+		}
+		if (PROC_SCENARIO) {
+			writeScenariosToDatabase();
+		}
+		if (PROC_SCEN_ENST) {
+			writeScenEnstLinksToDatabase();
+		}
+		if (PROC_CARD) {
+			writeCardsToDatabase();
+		}
+		endTransaction(false);
+	}
+
+	public void exportDatabaseToJson() throws IOException {
+		emInitialize();
+
+		if (PROC_DOMAIN) {
+			// Predicate<DomainBase> keepPredicate = new Predicate<DomainBase>()
+			// {
+			//
+			// @Override
+			// public boolean evaluate(DomainBase db) {
+			// // return !db.getLangItems().containsKey("pl");
+			// return db.getDomain().equals("trait");
+			// }
+			//
+			// };
+			List<DomainBase> dbList = readDomainsFromDatabase();
+			writeDomainsToJsonFile(dbList);
+		}
+		if (PROC_CYCLE) {
+			List<CycleBase> ccbList = readCyclesFromDatabase();
+			writeCyclesToJsonFile(ccbList);
+		}
+		if (PROC_CARD_SET) {
+			List<CardSetBase> csbList = readCardSetsFromDatabase();
+			writeCardSetsToJsonFile(csbList);
+		}
+		if (PROC_ENCO_SET) {
+			List<EncounterSetBase> esbList = readEncounterSetsFromDatabase();
+			writeEncounterSetsToJsonFile(esbList);
+		}
+		if (PROC_SCENARIO) {
+			List<ScenarioBase> ebList = readScenariosFromDatabase();
+			writeScenariosToJsonFile(ebList);
+		}
+		if (PROC_SCEN_ENST) {
+			List<ScenEnstLink> selList = readScenEnstLinksFromDatabase();
+			writeScenEnstLinksToJsonFile(selList);
+		}
+		if (PROC_CARD) {
+			Predicate<CardBase> keepPredicate = new Predicate<CardBase>() {
+
+				@Override
+				public boolean evaluate(CardBase cb) {
+					// return
+					// cb.getCardSetBase().getTechName().equals("the-great-devourer")
+					// ||
+					// cb.getCardSetBase().getTechName().equals("descendants-of-isha");
+					return true;
+				}
+
+			};
+			List<CardBase> cbList = readCardsFromDatabase(keepPredicate);
+			// for (CardBase cb : cbList) {
+			// if (cb.getLangItems().get("pl") == null) {
+			// CardLang cl = new CardLang("pl");
+			// cl.setName(" ");
+			// cl.setTrait(" ");
+			// cl.setImageLangCode("pl");
+			// cl.setRecordState("A");
+			// cb.getLangItems().put("pl", cl);
+			// }
+			// if (cb.getLangItems().get("en") != null) {
+			// cb.getLangItems().get("en").setImageLangCode("en");
+			// }
+			// }
+			writeCardsToJsonFile(cbList);
+		}
+	}
+
+	public void updateOctgnIds() {
+		beginTransaction();
+
+		StringBuilder myLog = new StringBuilder();
+		Map<String, String> map = new HashMap<>();
+		final String crstOrCycleTechName = "planetfall-cycle";
+
+		try {
+			DocumentBuilder db = DocumentBuilderFactory.newInstance().newDocumentBuilder();
+			Document doc = db.parse(DATA_BASE + "/octgn/04-" + crstOrCycleTechName + "/set.xml");
+			NodeList cardNodes = doc.getElementsByTagName("card");
+			for (int i = 0; i < cardNodes.getLength(); i++) {
+				Element cardElem = (Element) cardNodes.item(i);
+				String id = cardElem.getAttribute("id");
+				String name = cardElem.getAttribute("name");
+				String techName = Utils.toTechName(name);
+				System.out.println(id + "\t" + techName + "\t" + name);
+				if (StringUtils.isBlank(id)) {
+					continue;
+				}
+				if (map.containsKey(techName)) {
+					throw new IllegalStateException("Duplicate id");
+				}
+				map.put(techName, id);
+			}
+		} catch (Exception e) {
+			e.printStackTrace();
+		}
+
+		Predicate<CardBase> keepPredicate = new Predicate<CardBase>() {
+
+			@Override
+			public boolean evaluate(CardBase cb) {
+				String crstTechName = cb.getCardSetBase().getTechName();
+				String cycleTechName = null;
+				if (cb.getCardSetBase().getCycleBase() != null) {
+					cycleTechName = cb.getCardSetBase().getCycleBase().getTechName();
+				}
+				return (crstOrCycleTechName.equals(crstTechName)
+						|| crstOrCycleTechName.equals(cycleTechName));
+			}
+
+		};
+		List<CardBase> cbList = readCardsFromDatabase(keepPredicate);
+
+		String format = "%-25s";
+		int[] stats = new int[4];
+
+		for (CardBase cb : cbList) {
+			String techName = cb.getTechName();
+			String newOctgnId = map.get(techName);
+			String oldOctgnId = cb.getOctgnId();
+
+			if (StringUtils.isBlank(newOctgnId)) {
+				stats[0]++;
+				myLog.append(String.format(format, "missing new octgn id: "));
+				myLog.append(techName).append("\n");
+			} else if (oldOctgnId == null) {
+				stats[1]++;
+				cb.setOctgnId(map.get(techName));
+				myLog.append(String.format(format, "ids update: "));
+				myLog.append(techName).append(" -> ").append(newOctgnId).append("\n");
+				try {
+					em.flush();
+				} catch (RuntimeException e) {
+					System.out.println(myLog.toString());
+					throw e;
+				}
+			} else if (!newOctgnId.equals(oldOctgnId)) {
+				stats[2]++;
+				myLog.append(String.format(format, "ids mismatch: "));
+				myLog.append(techName).append(", was: ").append(oldOctgnId).append(", is: ")
+						.append(newOctgnId).append("\n");
+			} else {
+				stats[3]++;
+				myLog.append(String.format(format, "ids match: "));
+				myLog.append(techName).append("\n");
+			}
+		}
+
+		myLog.append("\n[SUMMARY]\n");
+		myLog.append(String.format(format, "missing new octgn id: ")).append(stats[0]).append("\n");
+		myLog.append(String.format(format, "ids update: ")).append(stats[1]).append("\n");
+		myLog.append(String.format(format, "ids mismatch: ")).append(stats[2]).append("\n");
+		myLog.append(String.format(format, "ids match: ")).append(stats[3]).append("\n");
+
+		System.out.println(myLog.toString());
+
+		endTransaction(false);
+	}
+
+	public void updateOctgnTexts() {
+		beginTransaction();
+
+		StringBuilder myLog = new StringBuilder();
+		Map<String, Card> octgnCards = new HashMap<>();
+		// final String crstOrCycleTechName = "warlord-cycle";
+		// final String crstTechName = "descendants-of-isha";
+
+		// final String crstOrCycleTechName = "the-great-devourer";
+		// final String crstTechName = "the-great-devourer";
+
+		final String crstOrCycleTechName = "planetfall-cycle";
+		// final String crstTechName = "decree-of-ruin";
+		final String crstTechName = "boundless-hate";
+
+		try {
+			DocumentBuilder db = DocumentBuilderFactory.newInstance().newDocumentBuilder();
+			Document doc = db
+					.parse(DATA_BASE + "/card-hunter/pl/04-" + crstOrCycleTechName + "/set.xml");
+			NodeList cardNodes = doc.getElementsByTagName("card");
+			for (int i = 0; i < cardNodes.getLength(); i++) {
+				Element cardElem = (Element) cardNodes.item(i);
+				Card card = new Card();
+				card.setOctgnId(cardElem.getAttribute("id"));
+				card.setName(cardElem.getAttribute("name"));
+				card.setTechName(Utils.toTechName(card.getName()));
+				card.setNumber(Integer.valueOf(cardElem.getAttribute("id").substring(3, 6)));
+				NodeList propertyNodes = cardElem.getElementsByTagName("property");
+				for (int j = 0; j < propertyNodes.getLength(); j++) {
+					Element propertyElem = (Element) propertyNodes.item(j);
+					if (propertyElem.getAttribute("name").equals("Text")) {
+						card.setText(StringUtils.trimToNull(propertyElem.getAttribute("value")));
+					}
+					if (propertyElem.getAttribute("name").equals("Traits")) {
+						card.setTrait(StringUtils.trimToNull(propertyElem.getAttribute("value")));
+					}
+				}
+				System.out.println(card.getId() + "\t" + card.getNumber() + "\t" + card.getName()
+						+ "\t" + card.getText());
+				if (octgnCards.containsKey(card.getTechName())) {
+					throw new IllegalStateException("Duplicate id");
+				}
+				octgnCards.put(card.getNumber().toString(), card);
+			}
+		} catch (Exception e) {
+			throw new RuntimeException(e);
+		}
+
+		Predicate<CardBase> keepPredicate = new Predicate<CardBase>() {
+
+			@Override
+			public boolean evaluate(CardBase cb) {
+				String dbCrstTechName = cb.getCardSetBase().getTechName();
+				String dbCycleTechName = null;
+				if (cb.getCardSetBase().getCycleBase() != null) {
+					dbCycleTechName = cb.getCardSetBase().getCycleBase().getTechName();
+				}
+				// return (crstOrCycleTechName.equals(crstTechName) ||
+				// crstOrCycleTechName.equals(cycleTechName))
+				// && CardType.PLANET != cb.getType() && CardType.TOKEN !=
+				// cb.getType();
+				return dbCrstTechName.equals(crstTechName);
+			}
+
+		};
+		List<CardBase> cbList = readCardsFromDatabase(keepPredicate);
+
+		String format = "%-25s";
+		int[] stats = new int[9];
+
+		for (CardBase cb : cbList) {
+			String techName = cb.getNumber().toString();
+			Card octgnCard = octgnCards.get(techName);
+
+			String langCode = "pl";
+			CardLang cl = cb.getLangItems().get(langCode);
+			if (cl == null) {
+				cl = new CardLang(langCode);
+				cl.setBase(cb);
+				cb.getLangItems().put(langCode, cl);
+				cl.setRecordState("A");
+				cl.setImageLangCode("en");
+			}
+
+			if (StringUtils.isNotBlank(cl.getText())) {
+				stats[0]++;
+				myLog.append(techName).append(": not updating - target not blank").append("\n");
+			} else if (StringUtils.isBlank(octgnCard.getText())) {
+				stats[1]++;
+				myLog.append(techName).append(": not updating - source blank").append("\n");
+			} else {
+				stats[2]++;
+				myLog.append(techName).append(": updating").append("\n");
+				cl.setText(octgnCard.getText());
+			}
+
+			if (StringUtils.isNotBlank(cl.getTrait())) {
+				stats[3]++;
+				myLog.append(techName).append(": not updating - target not blank").append("\n");
+			} else if (StringUtils.isBlank(octgnCard.getTrait())) {
+				stats[4]++;
+				myLog.append(techName).append(": not updating - source blank").append("\n");
+			} else {
+				stats[5]++;
+				myLog.append(techName).append(": updating").append("\n");
+				cl.setTrait(octgnCard.getTrait());
+			}
+
+			if (StringUtils.isNotBlank(cl.getName())) {
+				stats[6]++;
+				myLog.append(techName).append(": not updating - target not blank").append("\n");
+			} else if (StringUtils.isBlank(octgnCard.getName())) {
+				stats[7]++;
+				myLog.append(techName).append(": not updating - source blank").append("\n");
+			} else {
+				stats[8]++;
+				myLog.append(techName).append(": updating").append("\n");
+				cl.setName(octgnCard.getName());
+			}
+		}
+
+		myLog.append("\n[SUMMARY text]\n");
+		myLog.append(String.format(format, "target not blank: ")).append(stats[0]).append("\n");
+		myLog.append(String.format(format, "source blank: ")).append(stats[1]).append("\n");
+		myLog.append(String.format(format, "updated: ")).append(stats[2]).append("\n");
+
+		myLog.append("\n[SUMMARY trait]\n");
+		myLog.append(String.format(format, "target not blank: ")).append(stats[3]).append("\n");
+		myLog.append(String.format(format, "source blank: ")).append(stats[4]).append("\n");
+		myLog.append(String.format(format, "updated: ")).append(stats[5]).append("\n");
+
+		System.out.println(myLog.toString());
+
+		endTransaction(false);
 	}
 
 	private void updateTraitAndKeyword() {
@@ -159,7 +637,8 @@ public class DataLoader extends AbstractLoader {
 			}
 
 			if (enTraits.length != plTraits.length) {
-				myLog.append("mismatch: ").append(enTraitString).append(" # ").append(plTraitString).append("\n");
+				myLog.append("mismatch: ").append(enTraitString).append(" # ").append(plTraitString)
+						.append("\n");
 				continue;
 			}
 
@@ -168,7 +647,8 @@ public class DataLoader extends AbstractLoader {
 				DomainBase db = domainsByValue.get(value);
 				if (db != null) {
 					if (!db.getLangItems().containsKey("en")) {
-						myLog.append("missing en: ").append(value).append(" -> ").append(enTrait).append("\n");
+						myLog.append("missing en: ").append(value).append(" -> ").append(enTrait)
+								.append("\n");
 					}
 					if (!db.getLangItems().containsKey("pl")) {
 						myLog.append("missing pl: ").append(value).append("\n");
@@ -277,360 +757,10 @@ public class DataLoader extends AbstractLoader {
 
 	}
 
-	private void rename() {
-		String dirName = DATA_BASE + "../image/_raw_/card/pl/galakta/04-zc";
-		File dir = new File(dirName);
-		String[] fileNames = dir.list(new FilenameFilter() {
-
-			@Override
-			public boolean accept(File dir, String name) {
-				// return name.matches("WL_[\\p{Digit}]{1,4}\\.((jpg)|(png))");
-				return name.matches("[\\p{Digit}]{1,3}[^b]+\\.(png)");
-			}
-		});
-
-		JpaDao<Card, CardQuery> dao = new JpaDao<>(em);
-		Card card = new Card();
-		card.setCrstTechName("zogworts-curse");
-		List<Card> cards = dao.find(card);
-		HashMap<Integer, Card> map = new HashMap<Integer, Card>();
-		MapUtils.populateMap(map, cards, new Transformer<Card, Integer>() {
-
-			@Override
-			public Integer transform(Card input) {
-				return input.getNumber();
-			}
-		});
-
-		for (String fileName : fileNames) {
-			int underscore = fileName.indexOf('_');
-			int dot = fileName.indexOf('.') - 1;
-			Integer number = Integer.valueOf(fileName.substring(0, 3));
-			String newFileName = StringUtils.leftPad(number.toString(), 3, '0') + "-" + map.get(number).getTechName();
-			if (fileName.endsWith("jpg")) {
-				newFileName += ".jpg";
-			} else if (fileName.endsWith("png")) {
-				newFileName += ".png";
-			}
-			System.out.println(fileName + " -> " + newFileName);
-			File file = new File(dir, fileName);
-			file.renameTo(new File(dir, newFileName));
-		}
-	}
-
-	public void importDatabaseFromJson() throws IOException {
-		langItemsOnly = false;
-
-		beginTransaction();
-		if (PROC_DOMAIN) {
-			writeDomainsToDatabase();
-		}
-		if (PROC_CYCLE) {
-			writeCyclesToDatabase();
-		}
-		if (PROC_CARD_SET) {
-			writeCardSetsToDatabase();
-		}
-		if (PROC_CARD) {
-			writeCardsToDatabase();
-		}
-		endTransaction(false);
-	}
-
-	public void exportDatabaseToJson() throws IOException {
-		if (PROC_DOMAIN) {
-			// Predicate<DomainBase> keepPredicate = new Predicate<DomainBase>()
-			// {
-			//
-			// @Override
-			// public boolean evaluate(DomainBase db) {
-			// // return !db.getLangItems().containsKey("pl");
-			// return db.getDomain().equals("trait");
-			// }
-			//
-			// };
-			List<DomainBase> dbList = readDomainsFromDatabase();
-			writeDomainsToJsonFile(dbList);
-		}
-		if (PROC_CYCLE) {
-			List<CycleBase> ccbList = readCyclesFromDatabase();
-			writeCyclesToJsonFile(ccbList);
-		}
-		if (PROC_CARD_SET) {
-			List<CardSetBase> csbList = readCardSetsFromDatabase();
-			writeCardSetsToJsonFile(csbList);
-		}
-		if (PROC_ENCO_SET) {
-			List<EncounterSetBase> esbList = readEncounterSetsFromDatabase();
-			writeEncounterSetsToJsonFile(esbList);
-		}
-		if (PROC_SCENARIO) {
-			List<ScenarioBase> ebList = readScenariosFromDatabase();
-			writeScenariosToJsonFile(ebList);
-		}
-		if (PROC_SCEN_ENST) {
-			List<ScenEnstLink> selList = readScenEnstLinksFromDatabase();
-			writeScenEnstLinksToJsonFile(selList);
-		}
-		if (PROC_CARD) {
-			Predicate<CardBase> keepPredicate = new Predicate<CardBase>() {
-
-				@Override
-				public boolean evaluate(CardBase cb) {
-					// return
-					// cb.getCardSetBase().getTechName().equals("the-great-devourer")
-					// ||
-					// cb.getCardSetBase().getTechName().equals("descendants-of-isha");
-					return true;
-				}
-
-			};
-			List<CardBase> cbList = readCardsFromDatabase(keepPredicate);
-			// for (CardBase cb : cbList) {
-			// if (cb.getLangItems().get("pl") == null) {
-			// CardLang cl = new CardLang("pl");
-			// cl.setName(" ");
-			// cl.setTrait(" ");
-			// cl.setImageLangCode("pl");
-			// cl.setRecordState("A");
-			// cb.getLangItems().put("pl", cl);
-			// }
-			// if (cb.getLangItems().get("en") != null) {
-			// cb.getLangItems().get("en").setImageLangCode("en");
-			// }
-			// }
-			writeCardsToJsonFile(cbList);
-		}
-	}
-
-	public void updateOctgnIds() {
-		beginTransaction();
-
-		StringBuilder myLog = new StringBuilder();
-		Map<String, String> map = new HashMap<>();
-		final String crstOrCycleTechName = "planetfall-cycle";
-
-		try {
-			DocumentBuilder db = DocumentBuilderFactory.newInstance().newDocumentBuilder();
-			Document doc = db.parse(DATA_BASE + "/octgn/04-" + crstOrCycleTechName + "/set.xml");
-			NodeList cardNodes = doc.getElementsByTagName("card");
-			for (int i = 0; i < cardNodes.getLength(); i++) {
-				Element cardElem = (Element) cardNodes.item(i);
-				String id = cardElem.getAttribute("id");
-				String name = cardElem.getAttribute("name");
-				String techName = Utils.toTechName(name);
-				System.out.println(id + "\t" + techName + "\t" + name);
-				if (StringUtils.isBlank(id)) {
-					continue;
-				}
-				if (map.containsKey(techName)) {
-					throw new IllegalStateException("Duplicate id");
-				}
-				map.put(techName, id);
-			}
-		} catch (Exception e) {
-			e.printStackTrace();
-		}
-
-		Predicate<CardBase> keepPredicate = new Predicate<CardBase>() {
-
-			@Override
-			public boolean evaluate(CardBase cb) {
-				String crstTechName = cb.getCardSetBase().getTechName();
-				String cycleTechName = null;
-				if (cb.getCardSetBase().getCycleBase() != null) {
-					cycleTechName = cb.getCardSetBase().getCycleBase().getTechName();
-				}
-				return (crstOrCycleTechName.equals(crstTechName) || crstOrCycleTechName.equals(cycleTechName));
-			}
-
-		};
-		List<CardBase> cbList = readCardsFromDatabase(keepPredicate);
-
-		String format = "%-25s";
-		int[] stats = new int[4];
-
-		for (CardBase cb : cbList) {
-			String techName = cb.getTechName();
-			String newOctgnId = map.get(techName);
-			String oldOctgnId = cb.getOctgnId();
-
-			if (StringUtils.isBlank(newOctgnId)) {
-				stats[0]++;
-				myLog.append(String.format(format, "missing new octgn id: "));
-				myLog.append(techName).append("\n");
-			} else if (oldOctgnId == null) {
-				stats[1]++;
-				cb.setOctgnId(map.get(techName));
-				myLog.append(String.format(format, "ids update: "));
-				myLog.append(techName).append(" -> ").append(newOctgnId).append("\n");
-				try {
-					em.flush();
-				} catch (RuntimeException e) {
-					System.out.println(myLog.toString());
-					throw e;
-				}
-			} else if (!newOctgnId.equals(oldOctgnId)) {
-				stats[2]++;
-				myLog.append(String.format(format, "ids mismatch: "));
-				myLog.append(techName).append(", was: ").append(oldOctgnId).append(", is: ").append(newOctgnId)
-						.append("\n");
-			} else {
-				stats[3]++;
-				myLog.append(String.format(format, "ids match: "));
-				myLog.append(techName).append("\n");
-			}
-		}
-
-		myLog.append("\n[SUMMARY]\n");
-		myLog.append(String.format(format, "missing new octgn id: ")).append(stats[0]).append("\n");
-		myLog.append(String.format(format, "ids update: ")).append(stats[1]).append("\n");
-		myLog.append(String.format(format, "ids mismatch: ")).append(stats[2]).append("\n");
-		myLog.append(String.format(format, "ids match: ")).append(stats[3]).append("\n");
-
-		System.out.println(myLog.toString());
-
-		endTransaction(false);
-	}
-
-	public void updateOctgnTexts() {
-		beginTransaction();
-
-		StringBuilder myLog = new StringBuilder();
-		Map<String, Card> octgnCards = new HashMap<>();
-		// final String crstOrCycleTechName = "warlord-cycle";
-		// final String crstTechName = "descendants-of-isha";
-
-		// final String crstOrCycleTechName = "the-great-devourer";
-		// final String crstTechName = "the-great-devourer";
-
-		final String crstOrCycleTechName = "planetfall-cycle";
-		// final String crstTechName = "decree-of-ruin";
-		final String crstTechName = "boundless-hate";
-
-		try {
-			DocumentBuilder db = DocumentBuilderFactory.newInstance().newDocumentBuilder();
-			Document doc = db.parse(DATA_BASE + "/card-hunter/pl/04-" + crstOrCycleTechName + "/set.xml");
-			NodeList cardNodes = doc.getElementsByTagName("card");
-			for (int i = 0; i < cardNodes.getLength(); i++) {
-				Element cardElem = (Element) cardNodes.item(i);
-				Card card = new Card();
-				card.setOctgnId(cardElem.getAttribute("id"));
-				card.setName(cardElem.getAttribute("name"));
-				card.setTechName(Utils.toTechName(card.getName()));
-				card.setNumber(Integer.valueOf(cardElem.getAttribute("id").substring(3, 6)));
-				NodeList propertyNodes = cardElem.getElementsByTagName("property");
-				for (int j = 0; j < propertyNodes.getLength(); j++) {
-					Element propertyElem = (Element) propertyNodes.item(j);
-					if (propertyElem.getAttribute("name").equals("Text")) {
-						card.setText(StringUtils.trimToNull(propertyElem.getAttribute("value")));
-					}
-					if (propertyElem.getAttribute("name").equals("Traits")) {
-						card.setTrait(StringUtils.trimToNull(propertyElem.getAttribute("value")));
-					}
-				}
-				System.out.println(
-						card.getId() + "\t" + card.getNumber() + "\t" + card.getName() + "\t" + card.getText());
-				if (octgnCards.containsKey(card.getTechName())) {
-					throw new IllegalStateException("Duplicate id");
-				}
-				octgnCards.put(card.getNumber().toString(), card);
-			}
-		} catch (Exception e) {
-			throw new RuntimeException(e);
-		}
-
-		Predicate<CardBase> keepPredicate = new Predicate<CardBase>() {
-
-			@Override
-			public boolean evaluate(CardBase cb) {
-				String dbCrstTechName = cb.getCardSetBase().getTechName();
-				String dbCycleTechName = null;
-				if (cb.getCardSetBase().getCycleBase() != null) {
-					dbCycleTechName = cb.getCardSetBase().getCycleBase().getTechName();
-				}
-				// return (crstOrCycleTechName.equals(crstTechName) ||
-				// crstOrCycleTechName.equals(cycleTechName))
-				// && CardType.PLANET != cb.getType() && CardType.TOKEN !=
-				// cb.getType();
-				return dbCrstTechName.equals(crstTechName);
-			}
-
-		};
-		List<CardBase> cbList = readCardsFromDatabase(keepPredicate);
-
-		String format = "%-25s";
-		int[] stats = new int[9];
-
-		for (CardBase cb : cbList) {
-			String techName = cb.getNumber().toString();
-			Card octgnCard = octgnCards.get(techName);
-
-			String langCode = "pl";
-			CardLang cl = cb.getLangItems().get(langCode);
-			if (cl == null) {
-				cl = new CardLang(langCode);
-				cl.setBase(cb);
-				cb.getLangItems().put(langCode, cl);
-				cl.setRecordState("A");
-				cl.setImageLangCode("en");
-			}
-
-			if (StringUtils.isNotBlank(cl.getText())) {
-				stats[0]++;
-				myLog.append(techName).append(": not updating - target not blank").append("\n");
-			} else if (StringUtils.isBlank(octgnCard.getText())) {
-				stats[1]++;
-				myLog.append(techName).append(": not updating - source blank").append("\n");
-			} else {
-				stats[2]++;
-				myLog.append(techName).append(": updating").append("\n");
-				cl.setText(octgnCard.getText());
-			}
-
-			if (StringUtils.isNotBlank(cl.getTrait())) {
-				stats[3]++;
-				myLog.append(techName).append(": not updating - target not blank").append("\n");
-			} else if (StringUtils.isBlank(octgnCard.getTrait())) {
-				stats[4]++;
-				myLog.append(techName).append(": not updating - source blank").append("\n");
-			} else {
-				stats[5]++;
-				myLog.append(techName).append(": updating").append("\n");
-				cl.setTrait(octgnCard.getTrait());
-			}
-
-			if (StringUtils.isNotBlank(cl.getName())) {
-				stats[6]++;
-				myLog.append(techName).append(": not updating - target not blank").append("\n");
-			} else if (StringUtils.isBlank(octgnCard.getName())) {
-				stats[7]++;
-				myLog.append(techName).append(": not updating - source blank").append("\n");
-			} else {
-				stats[8]++;
-				myLog.append(techName).append(": updating").append("\n");
-				cl.setName(octgnCard.getName());
-			}
-		}
-
-		myLog.append("\n[SUMMARY text]\n");
-		myLog.append(String.format(format, "target not blank: ")).append(stats[0]).append("\n");
-		myLog.append(String.format(format, "source blank: ")).append(stats[1]).append("\n");
-		myLog.append(String.format(format, "updated: ")).append(stats[2]).append("\n");
-
-		myLog.append("\n[SUMMARY trait]\n");
-		myLog.append(String.format(format, "target not blank: ")).append(stats[3]).append("\n");
-		myLog.append(String.format(format, "source blank: ")).append(stats[4]).append("\n");
-		myLog.append(String.format(format, "updated: ")).append(stats[5]).append("\n");
-
-		System.out.println(myLog.toString());
-
-		endTransaction(false);
-	}
-
 	public void importDomainsFromFlatFile() throws FileNotFoundException, IOException {
 
-		List<String> lines = IOUtils.readLines(new FileInputStream(new File(RAW_BASE + "domain.txt")));
+		List<String> lines = IOUtils
+				.readLines(new FileInputStream(new File(RAW_BASE + "domain.txt")));
 
 		// if (!globalTransaction) {
 		em.getTransaction().begin();
@@ -678,7 +808,7 @@ public class DataLoader extends AbstractLoader {
 	}
 
 	public void writeDomainsToDatabase() throws IOException {
-		DomainBase[] sources = JsonUtils.read(DOMAIN_FILE_NAME, DomainBase[].class);
+		DomainBase[] sources = JsonUtils.read(FILE_DOMAIN, DomainBase[].class);
 
 		for (DomainBase source : sources) {
 			log.info("writing: {}/{}", source.getDomain(), source.getValue());
@@ -694,7 +824,7 @@ public class DataLoader extends AbstractLoader {
 	}
 
 	public void writeCyclesToDatabase() throws IOException {
-		CycleBase[] sources = JsonUtils.read(CYCLE_FILE_NAME, CycleBase[].class);
+		CycleBase[] sources = JsonUtils.read(FILE_CYCLE, CycleBase[].class);
 
 		for (CycleBase source : sources) {
 			CycleBase target = ccbDao.findUnique(source);
@@ -708,7 +838,10 @@ public class DataLoader extends AbstractLoader {
 	}
 
 	public void writeCardSetsToDatabase() throws IOException {
-		CardSetBase[] sources = JsonUtils.read(CARD_SET_FILE_NAME, CardSetBase[].class);
+		CardSetBase[] sources = JsonUtils.read(FILE_CARD_SET, CardSetBase[].class);
+
+		// load into persistence context
+		readCyclesFromDatabase();
 
 		for (CardSetBase source : sources) {
 			log.info("writing: {}", source.getTechName());
@@ -718,14 +851,15 @@ public class DataLoader extends AbstractLoader {
 				target = source;
 			}
 
-			CycleBase cycleBase = source.getCycleBase();
-			if (cycleBase != null) {
-				cycleBase = ccbDao.findUnique(cycleBase);
-				if (cycleBase == null) {
-					throw new RuntimeException("Unable to find cycle for card set: " + source.getTechName());
+			CycleBase ccb = source.getCycleBase();
+			if (ccb != null) {
+				ccb = ccbDao.findUnique(ccb);
+				if (ccb == null) {
+					throw new RuntimeException(
+							"Unable to find cycle for card set: " + source.getTechName());
 				}
 			}
-			target.setCycleBase(cycleBase);
+			target.setCycleBase(ccb);
 
 			if (target == source) {
 				persist(target);
@@ -736,8 +870,112 @@ public class DataLoader extends AbstractLoader {
 		}
 	}
 
+	private void writeEncounterSetsToDatabase() throws IOException {
+		EncounterSetBase[] sources = JsonUtils.read(FILE_ENCO_SET, EncounterSetBase[].class);
+
+		for (EncounterSetBase source : sources) {
+			log.info("writing: {}", source.getTechName());
+
+			EncounterSetBase target = esbDao.findUnique(source.cloneWithIdentity());
+			if (target == null) {
+				target = source;
+			}
+
+			CardSetBase csb = source.getCardSetBase();
+			if (csb != null) {
+				csb = csbDao.findUnique(csb);
+				if (csb == null) {
+					throw new RuntimeException(
+							"Unable to find card set for encounter set: " + source.getTechName());
+				}
+			}
+			target.setCardSetBase(csb);
+
+			if (target == source) {
+				persist(target);
+			} else {
+				merge(target, source);
+			}
+			em.flush();
+		}
+	}
+
+	private void writeScenariosToDatabase() throws IOException {
+		ScenarioBase[] sources = JsonUtils.read(FILE_SCENARIO, ScenarioBase[].class);
+
+		for (ScenarioBase source : sources) {
+			log.info("writing: {}", source.getTechName());
+
+			ScenarioBase target = sbDao.findUnique(source.cloneWithIdentity());
+			if (target == null) {
+				target = source;
+			}
+
+			CardSetBase csb = source.getCardSetBase();
+			if (csb != null) {
+				csb = csbDao.findUnique(csb);
+				if (csb == null) {
+					throw new RuntimeException(
+							"Unable to find card set for scenario: " + source.getTechName());
+				}
+			}
+			target.setCardSetBase(csb);
+
+			if (target == source) {
+				persist(target);
+			} else {
+				merge(target, source);
+			}
+			em.flush();
+		}
+	}
+
+	private void writeScenEnstLinksToDatabase() throws IOException {
+		ScenEnstLink[] sources = JsonUtils.read(FILE_SCEN_ENST_LINK, ScenEnstLink[].class);
+
+		for (ScenEnstLink source : sources) {
+			log.info("writing: {}, {}", source.getScenarioBase().getTechName(),
+					source.getEncounterSetBase().getTechName());
+
+			ScenEnstLink target = selDao.findUnique(source.cloneWithIdentity());
+			if (target == null) {
+				target = source;
+			}
+
+			// update scenario
+			ScenarioBase sb = source.getScenarioBase();
+			if (sb != null) {
+				sb = sbDao.findUnique(sb);
+				if (sb == null) {
+					throw new RuntimeException("Unable to find scenarion for scen enst link: "
+							+ source.getScenarioBase().getTechName());
+				}
+			}
+			target.setScenarioBase(sb);
+
+			// update encounter set
+			EncounterSetBase esb = source.getEncounterSetBase();
+			if (esb != null) {
+				esb = esbDao.findUnique(esb);
+				if (esb == null) {
+					throw new RuntimeException("Unable to find encouter set for scen enst link: "
+							+ source.getEncounterSetBase().getTechName());
+				}
+			}
+			target.setEncounterSetBase(esb);
+
+			if (target == source) {
+				em.persist(target);
+			} else {
+				target.setSequence(source.getSequence());
+				em.merge(target);
+			}
+			em.flush();
+		}
+	}
+
 	public void writeCardsToDatabase() throws IOException {
-		CardBase[] sources = JsonUtils.read(CARD_FILE_NAME, CardBase[].class);
+		CardBase[] sources = JsonUtils.read(FILE_CARD, CardBase[].class);
 
 		for (CardBase source : sources) {
 			log.info("writing: {}", source.getTechName());
@@ -752,10 +990,22 @@ public class DataLoader extends AbstractLoader {
 			if (csb != null) {
 				csb = csbDao.findUnique(csb);
 				if (csb == null) {
-					throw new RuntimeException("Unable to find card set for card: " + source.getTechName());
+					throw new RuntimeException(
+							"Unable to find card set for card: " + source.getTechName());
 				}
 			}
 			target.setCardSetBase(csb);
+
+			// update encounter set
+			EncounterSetBase esb = source.getEncounterSetBase();
+			if (esb != null) {
+				esb = esbDao.findUnique(esb);
+				if (esb == null) {
+					throw new RuntimeException(
+							"Unable to find encouter set for card: " + source.getTechName());
+				}
+			}
+			target.setEncounterSetBase(esb);
 
 			if (target == source) {
 				persist(target);
@@ -766,15 +1016,18 @@ public class DataLoader extends AbstractLoader {
 		}
 	}
 
-	public void writeDomainsToJsonFile(List<DomainBase> list) throws JsonProcessingException, IOException {
-		JsonUtils.write(list, DOMAIN_FILE_NAME);
+	public void writeDomainsToJsonFile(List<DomainBase> list)
+			throws JsonProcessingException, IOException {
+		JsonUtils.write(list, FILE_DOMAIN);
 	}
 
-	public void writeCyclesToJsonFile(List<CycleBase> list) throws JsonProcessingException, IOException {
-		JsonUtils.write(list, CYCLE_FILE_NAME);
+	public void writeCyclesToJsonFile(List<CycleBase> list)
+			throws JsonProcessingException, IOException {
+		JsonUtils.write(list, FILE_CYCLE);
 	}
 
-	public void writeCardSetsToJsonFile(List<CardSetBase> list) throws JsonProcessingException, IOException {
+	public void writeCardSetsToJsonFile(List<CardSetBase> list)
+			throws JsonProcessingException, IOException {
 		for (CardSetBase cardSetBase : list) {
 			CycleBase cycleBase = cardSetBase.getCycleBase();
 			if (cycleBase != null) {
@@ -783,10 +1036,11 @@ public class DataLoader extends AbstractLoader {
 				cardSetBase.setCycleBase(cycleBase);
 			}
 		}
-		JsonUtils.write(list, CARD_SET_FILE_NAME);
+		JsonUtils.write(list, FILE_CARD_SET);
 	}
 
-	public void writeEncounterSetsToJsonFile(List<EncounterSetBase> list) throws JsonProcessingException, IOException {
+	public void writeEncounterSetsToJsonFile(List<EncounterSetBase> list)
+			throws JsonProcessingException, IOException {
 		for (EncounterSetBase encounterSetBase : list) {
 			CardSetBase cardSetBase = encounterSetBase.getCardSetBase();
 			if (cardSetBase != null) {
@@ -795,10 +1049,11 @@ public class DataLoader extends AbstractLoader {
 				encounterSetBase.setCardSetBase(cardSetBase);
 			}
 		}
-		JsonUtils.write(list, ENCOUNTER_SET_FILE_NAME);
+		JsonUtils.write(list, FILE_ENCO_SET);
 	}
 
-	public void writeScenariosToJsonFile(List<ScenarioBase> list) throws JsonProcessingException, IOException {
+	public void writeScenariosToJsonFile(List<ScenarioBase> list)
+			throws JsonProcessingException, IOException {
 		for (ScenarioBase scenarioBase : list) {
 			CardSetBase cardSetBase = scenarioBase.getCardSetBase();
 			if (cardSetBase != null) {
@@ -807,10 +1062,11 @@ public class DataLoader extends AbstractLoader {
 				scenarioBase.setCardSetBase(cardSetBase);
 			}
 		}
-		JsonUtils.write(list, SCENARIO_FILE_NAME);
+		JsonUtils.write(list, FILE_SCENARIO);
 	}
 
-	public void writeScenEnstLinksToJsonFile(List<ScenEnstLink> list) throws JsonProcessingException, IOException {
+	public void writeScenEnstLinksToJsonFile(List<ScenEnstLink> list)
+			throws JsonProcessingException, IOException {
 		for (ScenEnstLink scenEnstLink : list) {
 			ScenarioBase scenarioBase = scenEnstLink.getScenarioBase();
 			if (scenarioBase != null) {
@@ -825,10 +1081,11 @@ public class DataLoader extends AbstractLoader {
 				scenEnstLink.setEncounterSetBase(encounterSetBase);
 			}
 		}
-		JsonUtils.write(list, SCEN_ENST_LINK_FILE_NAME);
+		JsonUtils.write(list, FILE_SCEN_ENST_LINK);
 	}
 
-	public void writeCardsToJsonFile(List<CardBase> list) throws JsonProcessingException, IOException {
+	public void writeCardsToJsonFile(List<CardBase> list)
+			throws JsonProcessingException, IOException {
 		for (CardBase cardBase : list) {
 			CardSetBase cardSetBase = cardBase.getCardSetBase();
 			if (cardSetBase != null) {
@@ -843,7 +1100,7 @@ public class DataLoader extends AbstractLoader {
 				cardBase.setEncounterSetBase(encounterSetBase);
 			}
 		}
-		JsonUtils.write(list, CARD_FILE_NAME);
+		JsonUtils.write(list, FILE_CARD);
 	}
 
 	private <B extends IBase<L>, L extends ILang<B>> void persist(B target) {

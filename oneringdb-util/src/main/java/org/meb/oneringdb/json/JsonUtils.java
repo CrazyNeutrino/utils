@@ -73,7 +73,7 @@ public class JsonUtils {
 		SerializationConfig config = mapper.getSerializationConfig();
 		config.addMixInAnnotations(DomainLang.class, JsonMixIn_StandardLang.class);
 		config.addMixInAnnotations(DomainBase.class, JsonMixIn_StandardBase.class);
-		config.addMixInAnnotations(CardSetBase.class, JsonMixIn_StandardBase.class);
+		config.addMixInAnnotations(CardSetBase.class, JsonMixIn_CardSetBase.class);
 		config.addMixInAnnotations(CardSetLang.class, JsonMixIn_StandardLang.class);
 		config.addMixInAnnotations(EncounterSetBase.class, JsonMixIn_EncounterSetBase.class);
 		config.addMixInAnnotations(EncounterSetLang.class, JsonMixIn_StandardLang.class);

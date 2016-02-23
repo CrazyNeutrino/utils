@@ -4,7 +4,8 @@ import org.codehaus.jackson.annotate.JsonIgnoreProperties;
 import org.codehaus.jackson.annotate.JsonPropertyOrder;
 
 @JsonIgnoreProperties(value = { "id", "version" })
-@JsonPropertyOrder(value = { "techName", "recordState", "langItems" })
-public interface JsonMixIn_StandardBase {
+@JsonPropertyOrder(value = { "techName", "typeCode", "cycleBase", "sequence", "released",
+		"releaseDate", "recordState", "langItems" })
+public interface JsonMixIn_CardSetBase {
 
 }

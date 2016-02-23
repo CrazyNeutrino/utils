@@ -56,7 +56,7 @@ public class ImageLoader extends AbstractLoader {
 				throw new IllegalArgumentException("Invalid argument");
 			}
 		} finally {
-			loader.cleanUp();
+			loader.emFinalize();
 		}
 	}
 
