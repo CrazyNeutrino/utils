@@ -3,7 +3,6 @@ package org.meb.oneringdb.db;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
-import java.io.FileReader;
 import java.io.FilenameFilter;
 import java.io.IOException;
 import java.util.HashMap;
@@ -19,15 +18,11 @@ import org.apache.commons.collections4.Predicate;
 import org.apache.commons.collections4.Transformer;
 import org.apache.commons.io.IOUtils;
 import org.apache.commons.lang.StringUtils;
-import org.codehaus.jackson.JsonNode;
-import org.codehaus.jackson.JsonParser;
 import org.codehaus.jackson.JsonProcessingException;
 import org.meb.oneringdb.db.dao.JpaDao;
 import org.meb.oneringdb.db.model.CardBase;
 import org.meb.oneringdb.db.model.CardLang;
 import org.meb.oneringdb.db.model.CardSetBase;
-import org.meb.oneringdb.db.model.CardSetLang;
-import org.meb.oneringdb.db.model.CardSetType;
 import org.meb.oneringdb.db.model.CycleBase;
 import org.meb.oneringdb.db.model.DomainBase;
 import org.meb.oneringdb.db.model.DomainLang;
@@ -38,7 +33,6 @@ import org.meb.oneringdb.db.model.ScenEnstLink;
 import org.meb.oneringdb.db.model.ScenarioBase;
 import org.meb.oneringdb.db.model.loc.Card;
 import org.meb.oneringdb.db.query.CardQuery;
-import org.meb.oneringdb.db.util.Functions;
 import org.meb.oneringdb.db.util.JpaUtils;
 import org.meb.oneringdb.db.util.Utils;
 import org.meb.oneringdb.json.JsonUtils;
@@ -48,13 +42,11 @@ import org.w3c.dom.Document;
 import org.w3c.dom.Element;
 import org.w3c.dom.NodeList;
 
-import com.google.common.collect.Maps;
-
 import lombok.Setter;
 
-public class DataLoader extends AbstractLoader {
+public class JsonDataLoader extends AbstractLoader {
 
-	private static final Logger log = LoggerFactory.getLogger(DataLoader.class);
+	private static final Logger log = LoggerFactory.getLogger(JsonDataLoader.class);
 
 	protected static final String DATA_BASE;
 	protected static final String JSON_BASE;
@@ -72,7 +64,7 @@ public class DataLoader extends AbstractLoader {
 		}
 
 		RAW_BASE = DATA_BASE + "_raw/";
-		JSON_BASE = DATA_BASE + "json-test/";
+		JSON_BASE = DATA_BASE + "json-test2/";
 		if (!new File(JSON_BASE).exists()) {
 			new File(JSON_BASE).mkdir();
 		}
@@ -105,14 +97,12 @@ public class DataLoader extends AbstractLoader {
 	private boolean langItemsOnly = false;
 
 	public static void main(String[] args) throws IOException {
-		DataLoader loader = new DataLoader();
+		JsonDataLoader loader = new JsonDataLoader();
 		try {
 			if (args[0].equals("--import-json")) {
 				loader.importDatabaseFromJson();
 			} else if (args[0].equals("--export-json")) {
 				loader.exportDatabaseToJson();
-			} else if (args[0].equals("--update-sets-from-beorn")) {
-				loader.updateSetsFromBeorn();
 			} else if (args[0].equals("--rename") && DEV_ENV) {
 				loader.rename();
 			} else if (args[0].equals("--update-octgn-ids")) {
@@ -126,104 +116,6 @@ public class DataLoader extends AbstractLoader {
 			}
 		} finally {
 			loader.emFinalize();
-		}
-	}
-
-	public void updateSetsFromBeorn() {
-		emInitialize();
-		
-		beginTransaction();
-
-		Map<String, CardSetType> typeMapping = new HashMap<>();
-		typeMapping.put("Core", CardSetType.CORE);
-		typeMapping.put("Adventure_Pack", CardSetType.AP);
-		typeMapping.put("Deluxe_Expansion", CardSetType.DELUXE);
-		typeMapping.put("Saga_Expansion", CardSetType.SAGA);
-		typeMapping.put("Nightmare_Expansion", CardSetType.ND);
-		typeMapping.put("GenCon_Expansion", CardSetType.GC);
-		typeMapping.put("GenConSaga_Expansion", CardSetType.GC_SAGA);
-		typeMapping.put("Fellowship_Deck", CardSetType.FD);
-		
-		StringBuilder myLog = new StringBuilder();
-
-		List<CardSetBase> csbList = readCardSetsFromDatabase();
-		Map<String, CardSetBase> csbMap = Maps.uniqueIndex(csbList, Functions.CardSetBaseTechName);
-
-		try {
-			JsonParser parser = JsonUtils
-					.createJsonParser(new FileReader(DATA_BASE + "beorn/sets.json"));
-			Iterator<JsonNode> jsonSetsIter = parser.readValueAsTree().getElements();
-			while (jsonSetsIter.hasNext()) {
-				JsonNode jsonSet = jsonSetsIter.next();
-				String name = jsonSet.get("Name").getTextValue();
-				String techName = Utils.toTechName(name);
-
-				String cycleName = jsonSet.get("Cycle").getTextValue();
-				if ("NIGHTMARE".equals(cycleName) || "GenCon".equals(cycleName)) {
-					cycleName = null;
-				}
-				String cycleTechName = null;
-				if (cycleName != null) {
-					cycleTechName = Utils.toTechName(cycleName);
-				}
-
-				String typeString = jsonSet.get("SetType").asText();
-				if (typeString.equals("CUSTOM")) {
-					continue;
-				}
-				CardSetType type = typeMapping.get(typeString);
-				if (type == null) {
-					throw new RuntimeException("No mapping for: " + typeString);
-				}
-
-				myLog.append(techName);
-				myLog.append(", ").append(cycleTechName);
-				myLog.append(", ").append(type);
-				myLog.append("\n");
-
-				if (csbMap.containsKey(techName)) {
-					myLog.append("exists").append("\n");
-					continue;
-				}
-				
-				CardSetBase csb = new CardSetBase();
-				csb.setTechName(techName);
-				csb.setTypeCode(type);
-				csb.setRecordState("A");
-				csb.setReleased(true);
-				
-				String langCode = "en";
-				CardSetLang csl = csb.getLangItems().get(langCode);
-				if (csl == null) {
-					csl = new CardSetLang();
-					csl.setBase(csb);
-					csb.getLangItems().put(langCode, csl);
-					csl.setLangCode(langCode);
-					csl.setName(name);
-					csl.setRecordState("A");
-				}
-				
-				if (cycleTechName != null) {
-					CycleBase ccb = ccbDao.findUnique(new CycleBase(cycleTechName));
-					if (ccb == null) {
-						throw new RuntimeException(
-								"Unable to find cycle for card set: " + csb.getTechName());
-					}
-					csb.setCycleBase(ccb);
-				}
-
-				myLog.append("persist").append("\n");
-				
-				em.persist(csb);
-				em.flush();
-			}
-			
-			endTransaction(false);
-		} catch (IOException e) {
-			endTransaction(true);
-			e.printStackTrace();
-		} finally {
-			log.info(myLog.toString());
 		}
 	}
 
@@ -296,7 +188,7 @@ public class DataLoader extends AbstractLoader {
 		if (PROC_CARD) {
 			writeCardsToDatabase();
 		}
-		endTransaction(false);
+		endTransaction(true);
 	}
 
 	public void exportDatabaseToJson() throws IOException {
@@ -492,7 +384,7 @@ public class DataLoader extends AbstractLoader {
 						card.setText(StringUtils.trimToNull(propertyElem.getAttribute("value")));
 					}
 					if (propertyElem.getAttribute("name").equals("Traits")) {
-						card.setTrait(StringUtils.trimToNull(propertyElem.getAttribute("value")));
+						card.setTraits(StringUtils.trimToNull(propertyElem.getAttribute("value")));
 					}
 				}
 				System.out.println(card.getId() + "\t" + card.getNumber() + "\t" + card.getName()
@@ -554,16 +446,16 @@ public class DataLoader extends AbstractLoader {
 				cl.setText(octgnCard.getText());
 			}
 
-			if (StringUtils.isNotBlank(cl.getTrait())) {
+			if (StringUtils.isNotBlank(cl.getTraits())) {
 				stats[3]++;
 				myLog.append(techName).append(": not updating - target not blank").append("\n");
-			} else if (StringUtils.isBlank(octgnCard.getTrait())) {
+			} else if (StringUtils.isBlank(octgnCard.getTraits())) {
 				stats[4]++;
 				myLog.append(techName).append(": not updating - source blank").append("\n");
 			} else {
 				stats[5]++;
 				myLog.append(techName).append(": updating").append("\n");
-				cl.setTrait(octgnCard.getTrait());
+				cl.setTraits(octgnCard.getTraits());
 			}
 
 			if (StringUtils.isNotBlank(cl.getName())) {

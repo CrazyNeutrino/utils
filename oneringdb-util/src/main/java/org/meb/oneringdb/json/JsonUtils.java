@@ -92,6 +92,8 @@ public class JsonUtils {
 		module.addSerializer(CardType.class, new CardTypeSerializer());
 		module.addDeserializer(Sphere.class, new SphereDeserializer());
 		module.addSerializer(Sphere.class, new SphereSerializer());
+//		module.addDeserializer(ScenEnstLink.class, new ScenEnstLinkDeserializer());
+//		module.addSerializer(ScenEnstLink.class, new ScenEnstLinkSerializer());
 		module.addSerializer(ResourceBundle.class, new JsonSerializer<ResourceBundle>() {
 
 			@Override
