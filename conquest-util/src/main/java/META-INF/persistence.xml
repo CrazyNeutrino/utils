@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<persistence version="2.0" xmlns="http://java.sun.com/xml/ns/persistence" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="http://java.sun.com/xml/ns/persistence http://java.sun.com/xml/ns/persistence/persistence_2_0.xsd">
+	<persistence-unit name="conquest-pu" transaction-type="RESOURCE_LOCAL">
+		<provider>org.hibernate.jpa.HibernatePersistenceProvider</provider>
+
+		<class>org.meb.conquest.db.model.DomainBase</class>
+		<class>org.meb.conquest.db.model.DomainLang</class>
+		<class>org.meb.conquest.db.model.CycleBase</class>
+		<class>org.meb.conquest.db.model.CycleLang</class>
+		<class>org.meb.conquest.db.model.CardSetBase</class>
+		<class>org.meb.conquest.db.model.CardSetLang</class>
+		<class>org.meb.conquest.db.model.CardBase</class>
+		<class>org.meb.conquest.db.model.CardLang</class>
+		<class>org.meb.conquest.db.model.Deck</class>
+		<class>org.meb.conquest.db.model.DeckMember</class>
+		<class>org.meb.conquest.db.model.DeckLink</class>
+		<class>org.meb.conquest.db.model.DeckComment</class>
+		<class>org.meb.conquest.db.model.User</class>
+		<class>org.meb.conquest.db.model.UserContribSummary</class>
+		<class>org.meb.conquest.db.model.loc.Domain</class>
+		<class>org.meb.conquest.db.model.loc.Cycle</class>
+		<class>org.meb.conquest.db.model.loc.CardSet</class>
+		<class>org.meb.conquest.db.model.loc.Card</class>
+
+		<properties>
+			<property name="hibernate.connection.driver_class" value="com.mysql.jdbc.Driver" />
+			<property name="hibernate.connection.username" value="conquest_imp" />
+			<property name="hibernate.connection.password" value="glamdRING13-" />
+			<property name="hibernate.connection.url" value="jdbc:mysql://localhost:3306/conquest?useUnicode=true&amp;characterEncoding=utf8" />
+			<property name="hibernate.show_sql" value="true" />
+			<property name="hibernate.format_sql" value="true" />
+			<property name="hibernate.dialect" value="org.hibernate.dialect.MySQLDialect" />
+			<property name="hibernate.ejb.naming_strategy" value="org.hibernate.cfg.ImprovedNamingStrategy" />
+			<property name="hibernate.jdbc.use_get_generated_keys" value="false" />
+			<!-- <property name="hibernate.archive.autodetection" value="class"/> -->
+		</properties>
+	</persistence-unit>
+</persistence>
