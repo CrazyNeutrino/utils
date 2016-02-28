@@ -1,12 +1,9 @@
 package org.meb.oneringdb.db;
 
 import java.io.File;
-import java.io.FileInputStream;
-import java.io.FileNotFoundException;
 import java.io.FilenameFilter;
 import java.io.IOException;
 import java.util.HashMap;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 
@@ -16,7 +13,6 @@ import javax.xml.parsers.DocumentBuilderFactory;
 import org.apache.commons.collections4.MapUtils;
 import org.apache.commons.collections4.Predicate;
 import org.apache.commons.collections4.Transformer;
-import org.apache.commons.io.IOUtils;
 import org.apache.commons.lang.StringUtils;
 import org.codehaus.jackson.JsonProcessingException;
 import org.meb.oneringdb.db.dao.JpaDao;
@@ -25,7 +21,6 @@ import org.meb.oneringdb.db.model.CardLang;
 import org.meb.oneringdb.db.model.CardSetBase;
 import org.meb.oneringdb.db.model.CycleBase;
 import org.meb.oneringdb.db.model.DomainBase;
-import org.meb.oneringdb.db.model.DomainLang;
 import org.meb.oneringdb.db.model.EncounterSetBase;
 import org.meb.oneringdb.db.model.IBase;
 import org.meb.oneringdb.db.model.ILang;
@@ -50,23 +45,29 @@ public class JsonDataLoader extends AbstractLoader {
 
 	protected static final String DATA_BASE;
 	protected static final String JSON_BASE;
-	protected static final String RAW_BASE;
+	protected static final String IMAGE_BASE;
 
 	static {
-		String tmpDataBase = System.getProperty("data.home");
-		if (StringUtils.isBlank(tmpDataBase)) {
-			throw new IllegalStateException("Data home not set");
+		String home = System.getProperty("home");
+		if (StringUtils.isBlank(home)) {
+			throw new IllegalStateException("Home not set");
 		}
-		if (tmpDataBase.trim().endsWith("/")) {
-			DATA_BASE = tmpDataBase;
+		if (home.trim().endsWith("/")) {
+			DATA_BASE = home + "data/";
+			IMAGE_BASE = home + "image/";
 		} else {
-			DATA_BASE = tmpDataBase + "/";
+			DATA_BASE = home + "/data/";
+			IMAGE_BASE = home + "/image/";
 		}
+		JSON_BASE = DATA_BASE + "json-domain/";
+		createDirectory(DATA_BASE);
+		createDirectory(IMAGE_BASE);
+		createDirectory(JSON_BASE);
+	}
 
-		RAW_BASE = DATA_BASE + "_raw/";
-		JSON_BASE = DATA_BASE + "json-test2/";
-		if (!new File(JSON_BASE).exists()) {
-			new File(JSON_BASE).mkdir();
+	private static void createDirectory(String name) {
+		if (!new File(name).exists()) {
+			new File(name).mkdir();
 		}
 	}
 
@@ -647,56 +648,6 @@ public class JsonDataLoader extends AbstractLoader {
 		// log.info(keywordUpdate.toString());
 		// }
 
-	}
-
-	public void importDomainsFromFlatFile() throws FileNotFoundException, IOException {
-
-		List<String> lines = IOUtils
-				.readLines(new FileInputStream(new File(RAW_BASE + "domain.txt")));
-
-		// if (!globalTransaction) {
-		em.getTransaction().begin();
-		// }
-
-		String domain = null;
-		String[] langs = { "en", "pl" };
-
-		Iterator<String> iter = lines.iterator();
-		while (iter.hasNext()) {
-			String line = iter.next();
-			if (StringUtils.isBlank(line)) {
-				continue;
-			}
-
-			if (line.trim().matches(":[A-Z ]+:")) {
-				domain = Utils.toTechName(line.trim());
-			} else {
-				if (StringUtils.isBlank(domain)) {
-					throw new IllegalStateException("Domain is blank");
-				}
-
-				String[] tokens = line.replaceAll("\t+", "\t").split("\\t");
-				DomainBase db = new DomainBase();
-				db.setDomain(domain);
-				db.setRecordState("A");
-				db.setValue(Utils.toTechName(tokens[0]));
-
-				for (int i = 0; i < tokens.length; i++) {
-					DomainLang dl = new DomainLang();
-					dl.setBase(db);
-					dl.setRecordState("A");
-					dl.setLangCode(langs[i]);
-					dl.setDescription(tokens[i]);
-					db.getLangItems().put(langs[i], dl);
-				}
-				em.persist(db);
-				em.flush();
-			}
-		}
-
-		// if (!globalTransaction) {
-		em.getTransaction().commit();
-		// }
 	}
 
 	public void writeDomainsToDatabase() throws IOException {
