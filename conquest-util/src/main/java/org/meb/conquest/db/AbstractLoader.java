@@ -45,11 +45,11 @@ public abstract class AbstractLoader {
 		tx.begin();
 	}
 
-	protected void endTransaction(boolean rollback) {
-		if (rollback) {
-			em.getTransaction().rollback();
-		} else {
+	protected void endTransaction(boolean commit) {
+		if (commit) {
 			em.getTransaction().commit();
+		} else {
+			em.getTransaction().rollback();
 		}
 	}
 	
