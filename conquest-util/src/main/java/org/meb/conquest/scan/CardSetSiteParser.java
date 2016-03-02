@@ -25,8 +25,8 @@ public class CardSetSiteParser {
 			// CardSetSiteParser().parseCardSetUrls();
 			List<CardSetInfo> csInfos = new ArrayList<CardSetInfo>();
 			csInfos.add(new CardSetInfo(
-					"Boundless Hate",
-					"http://www.cardgamedb.com/index.php/wh40kconquest/conquest.html/_/planetfall-cycle/boundless-hate/"));
+					"Deadly Salvage",
+					"http://www.cardgamedb.com/index.php/wh40kconquest/conquest.html/_/planetfall-cycle/deadly-salvage/"));
 			CardHandlerChain chain = new CardHandlerChain();
 			chain.addCardHandler(new WriteLogCardHandler());
 			WriteJsonCardHandler jsonHandler = new WriteJsonCardHandler("en");

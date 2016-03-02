@@ -50,10 +50,17 @@ public class CardSiteParser {
 		mappings.put("signature/loyalty", "signatureLoyalty");
 
 		replaceMap = new HashMap<String, String>();
-		for (String string : new String[] { "SPACE MARINE", "ASTRA MILITARUM", "TAU", "ELDAR", "DARK ELDAR", "CHAOS",
-				"ORK", "RESOURCE" }) {
-			replaceMap.put("[" + string + "]", "${" + Utils.toTechName(string) + "}");
+		for (String string : new String[] { "ASTRA MILITARUM", "TAU", "ELDAR",
+				"DARK ELDAR", "CHAOS", "ORK", "RESOURCE", "NECRON", }) {
+			replaceMap.put("[" + string + "]",
+					"[" + StringUtils.capitalize(string.toLowerCase()) + "]");
 		}
+		replaceMap.put("[SPACE MARINE]", "[Space Marines]");
+		replaceMap.put("[TYRANIDS]", "[Tyranid]");
+		replaceMap.put("[+1 CARD]", "+1 [Card]");
+		replaceMap.put("[+1 Card]", "+1 [Card]");
+		replaceMap.put("[+1 RESOURCE]", "+1 [Resource]");
+		replaceMap.put("[+1 Resource]", "+1 [Resource]");
 	}
 
 	public void parseSites(List<CardSetInfo> csInfos, CardHandler handler) throws IOException {
@@ -65,9 +72,7 @@ public class CardSiteParser {
 	public void parseSite(CardSetInfo csInfo, CardHandler handler) throws IOException {
 		List<Document> docs = new ArrayList<Document>();
 		log.info("parseSite(): base doc: {}", csInfo.getUrl());
-		docs.add(Jsoup
-				.connect(csInfo.getUrl())
-				.timeout(20000)
+		docs.add(Jsoup.connect(csInfo.getUrl()).timeout(20000)
 				.header("Referer", "www.cardgamedb.com")
 				.header("User-Agent",
 						"Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/46.0.2490.86 Safari/537.36")
@@ -224,7 +229,8 @@ public class CardSiteParser {
 		parseCommonCardInfo(card, tdCardInfo);
 	}
 
-	private List<CardProperty> extractKeyValueInfo(Element tdCardInfo, Map<String, String> mappings) {
+	private List<CardProperty> extractKeyValueInfo(Element tdCardInfo,
+			Map<String, String> mappings) {
 		List<CardProperty> properties = new ArrayList<CardProperty>();
 		Elements bInfoNames = tdCardInfo.select("> b");
 		Iterator<Element> iter = bInfoNames.iterator();
@@ -248,8 +254,8 @@ public class CardSiteParser {
 
 				String propertyName = mappings.get(infoName);
 				properties.add(new CardProperty(propertyName, infoValue));
-				log.debug("extractKeyValueInfo(): propertyName: {}, infoName: {}, infoValue: {}", new Object[] {
-						propertyName, infoName, infoValue });
+				log.debug("extractKeyValueInfo(): propertyName: {}, infoName: {}, infoValue: {}",
+						new Object[] { propertyName, infoName, infoValue });
 			}
 		}
 		return properties;
@@ -292,7 +298,8 @@ public class CardSiteParser {
 				element = (Element) node;
 				elementTagName = element.tagName();
 				if (!textMode) {
-					if (elementTagName.equals("span") || elementTagName.equals("strong") || elementTagName.equals("i")) {
+					if (elementTagName.equals("span") || elementTagName.equals("strong")
+							|| elementTagName.equals("i")) {
 						textMode = true;
 					}
 				}
@@ -330,7 +337,8 @@ public class CardSiteParser {
 			flavourText = flavourText.replace("”", "\"");
 			flavourText = flavourText.replace("“", "\"");
 			flavourText = flavourText.replace("‘", "\"");
-			properties.add(new CardProperty("flavourText", StringEscapeUtils.unescapeHtml(flavourText)));
+			properties.add(
+					new CardProperty("flavourText", StringEscapeUtils.unescapeHtml(flavourText)));
 		}
 		// CardProperty traitProperty = extractTraitProperty(tdCardInfo);
 		// if (traitProperty != null) {

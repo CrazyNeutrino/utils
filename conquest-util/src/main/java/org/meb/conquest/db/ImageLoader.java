@@ -32,14 +32,15 @@ public class ImageLoader extends AbstractLoader {
 	protected static final String IMAGE_BASE_CARDGAME_DB;
 
 	static {
-		String tmpImageBase = System.getProperty("image.home");
-		if (StringUtils.isBlank(tmpImageBase)) {
-			throw new IllegalStateException("Image home not set");
+		String home = System.getProperty("home");
+		if (StringUtils.isBlank(home)) {
+			throw new IllegalStateException("Home not set");
 		}
-		if (tmpImageBase.trim().endsWith("/")) {
-			IMAGE_BASE = tmpImageBase;
+		
+		if (home.trim().endsWith("/")) {
+			IMAGE_BASE = home.trim() + "image/";
 		} else {
-			IMAGE_BASE = tmpImageBase + "/";
+			IMAGE_BASE = home.trim() + "/image/";
 		}
 		IMAGE_BASE_BORWOL = IMAGE_BASE + "_raw_/card/pl/borwol/";
 		IMAGE_BASE_CARDGAME_DB = IMAGE_BASE + "_raw_/card/en/cgdb/";
@@ -48,10 +49,10 @@ public class ImageLoader extends AbstractLoader {
 	public static void main(String[] args) throws IOException {
 		ImageLoader loader = new ImageLoader();
 		try {
-			if (args[0].equals("--borwol")) {
+			if (args[0].equals("--load-images-borwol")) {
 				loader.loadFromBorwol();
-			} else if (args[0].equals("--cardgamedb")) {
-				loader.loadFromCardgameDB();
+			} else if (args[0].equals("--load-images-cgdb")) {
+				loader.loadFromCGDB();
 			} else {
 				throw new IllegalArgumentException("Invalid argument");
 			}
@@ -109,12 +110,12 @@ public class ImageLoader extends AbstractLoader {
 		}
 	}
 
-	public void loadFromCardgameDB() throws MalformedURLException, IOException {
+	public void loadFromCGDB() throws MalformedURLException, IOException {
 		Predicate<CardBase> keepPredicate = new Predicate<CardBase>() {
 
 			@Override
 			public boolean evaluate(CardBase cb) {
-				return cb.getCardSetBase().getTechName().equals("boundless-hate");
+				return cb.getCardSetBase().getTechName().equals("deadly-salvage");
 			}
 			
 		};
@@ -122,7 +123,7 @@ public class ImageLoader extends AbstractLoader {
 		for (CardBase card : cards) {
 			String crstPathPart = StringUtils.leftPad(card.getCardSetBase().getSequence().toString(), 2, "0");
 			crstPathPart += "-" + Utils.techNameToAcronym(card.getCardSetBase().getTechName());
-			String urlCardPathPart = "med_WHK10_" + card.getNumber().toString() + ".jpg";
+			String urlCardPathPart = "med_WHK11_" + card.getNumber().toString() + ".jpg";
 			String fileCardPathPart = StringUtils.leftPad(card.getNumber().toString(), 3, "0");
 			fileCardPathPart += "-" + card.getTechName() + ".jpg";
 

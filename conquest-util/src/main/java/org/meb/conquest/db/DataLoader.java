@@ -68,7 +68,7 @@ public class DataLoader extends AbstractLoader {
 			DATA_BASE = home + "/data/";
 			IMAGE_BASE = home + "/image/";
 		}
-		JSON_BASE = DATA_BASE + "json-test2/";
+		JSON_BASE = DATA_BASE + "json-ds/";
 		createDirectory(DATA_BASE);
 		createDirectory(IMAGE_BASE);
 		createDirectory(JSON_BASE);
@@ -292,13 +292,13 @@ public class DataLoader extends AbstractLoader {
 	}
 
 	private void renameBorwol() {
-		String crstTechName = "boundless-hate";
+		String crstTechName = "deadly-salvage";
 		CardSetBase crst = new CardSetBaseDao(em).findUnique(new CardSetBase(crstTechName));
-		
-		String dirName = DATA_BASE + "../image/_raw_/card/pl/borwol/";
+
+		String dirName = IMAGE_BASE + "_raw_/card/pl/borwol/";
 		dirName += StringUtils.leftPad(crst.getSequence().toString(), 2, '0');
 		dirName += "-" + crst.getTechName();
-		
+
 		File dir = new File(dirName);
 		String[] fileNames = dir.list(new FilenameFilter() {
 
@@ -323,7 +323,7 @@ public class DataLoader extends AbstractLoader {
 
 		for (String fileName : fileNames) {
 			int dash = fileName.indexOf('-');
-			Integer number = Integer.valueOf(fileName.substring(0, 3));
+			Integer number = Integer.valueOf(fileName.substring(0, 2));
 			String newFileName = StringUtils.leftPad(number.toString(), 3, '0') + "-"
 					+ map.get(number).getTechName();
 			if (dash != -1) {
@@ -519,7 +519,7 @@ public class DataLoader extends AbstractLoader {
 		if (PROC_CARD) {
 			writeCardsToDatabase();
 		}
-		endTransaction(false);
+		endTransaction(true);
 	}
 
 	public void exportDatabaseToJson() throws IOException {
@@ -550,28 +550,25 @@ public class DataLoader extends AbstractLoader {
 
 				@Override
 				public boolean evaluate(CardBase cb) {
-					// return
-					// cb.getCardSetBase().getTechName().equals("the-great-devourer")
-					// ||
-					// cb.getCardSetBase().getTechName().equals("descendants-of-isha");
-					return true;
+					return cb.getCardSetBase().getTechName().equals("deadly-salvage");
+					// return true;
 				}
 
 			};
 			List<CardBase> cbList = readCardsFromDatabase(keepPredicate);
-			// for (CardBase cb : cbList) {
-			// if (cb.getLangItems().get("pl") == null) {
-			// CardLang cl = new CardLang("pl");
-			// cl.setName(" ");
-			// cl.setTrait(" ");
-			// cl.setImageLangCode("pl");
-			// cl.setRecordState("A");
-			// cb.getLangItems().put("pl", cl);
-			// }
-			// if (cb.getLangItems().get("en") != null) {
-			// cb.getLangItems().get("en").setImageLangCode("en");
-			// }
-			// }
+			for (CardBase cb : cbList) {
+				if (cb.getLangItems().get("pl") == null) {
+					CardLang cl = new CardLang("pl");
+					cl.setName(" ");
+					cl.setTrait(" ");
+					cl.setImageLangCode("pl");
+					cl.setRecordState("A");
+					cb.getLangItems().put("pl", cl);
+				}
+				// if (cb.getLangItems().get("en") != null) {
+				// cb.getLangItems().get("en").setImageLangCode("en");
+				// }
+			}
 			writeCardsToJsonFile(cbList);
 		}
 
@@ -666,7 +663,7 @@ public class DataLoader extends AbstractLoader {
 
 		System.out.println(myLog.toString());
 
-		endTransaction(false);
+		endTransaction(true);
 	}
 
 	public void updateOctgnTexts() {
