@@ -41,7 +41,7 @@ public abstract class AbstractLoader {
 	private boolean globalRollback = true;
 
 	protected void emInitialize() {
-		EntityManagerFactory emf = Persistence.createEntityManagerFactory("conquest-pu");
+		EntityManagerFactory emf = Persistence.createEntityManagerFactory("oneringdb-pu");
 		em = emf.createEntityManager();
 		dbDao = new DomainBaseDao(em);
 		ccbDao = new CycleBaseDao(em);

@@ -15,6 +15,7 @@ import org.apache.commons.collections4.Predicate;
 import org.apache.commons.collections4.Transformer;
 import org.apache.commons.lang.StringUtils;
 import org.codehaus.jackson.JsonProcessingException;
+import org.meb.oneringdb.db.dao.EncounterSetBaseDao;
 import org.meb.oneringdb.db.dao.JpaDao;
 import org.meb.oneringdb.db.model.CardBase;
 import org.meb.oneringdb.db.model.CardLang;
@@ -59,7 +60,7 @@ public class JsonDataLoader extends AbstractLoader {
 			DATA_BASE = home + "/data/";
 			IMAGE_BASE = home + "/image/";
 		}
-		JSON_BASE = DATA_BASE + "json-domain/";
+		JSON_BASE = DATA_BASE + "json-encset-icons/";
 		createDirectory(DATA_BASE);
 		createDirectory(IMAGE_BASE);
 		createDirectory(JSON_BASE);
@@ -104,7 +105,7 @@ public class JsonDataLoader extends AbstractLoader {
 				loader.importDatabaseFromJson();
 			} else if (args[0].equals("--export-json")) {
 				loader.exportDatabaseToJson();
-			} else if (args[0].equals("--rename") && DEV_ENV) {
+			} else if (args[0].equals("--rename")) {
 				loader.rename();
 			} else if (args[0].equals("--update-octgn-ids")) {
 				loader.updateOctgnIds();
@@ -112,11 +113,39 @@ public class JsonDataLoader extends AbstractLoader {
 				loader.updateOctgnTexts();
 			} else if (args[0].equals("--update-trait-keyword")) {
 				loader.updateTraitAndKeyword();
+			} else if (args[0].equals("--rename-encset")) {
+				loader.renameEncset();
 			} else {
 				throw new IllegalArgumentException("Invalid argument");
 			}
 		} finally {
 			loader.emFinalize();
+		}
+	}
+
+	private void renameEncset() {
+		String dirName = IMAGE_BASE + "_raw/encset";
+		File dir = new File(dirName);
+		// String[] fileNames = dir.list(new FilenameFilter() {
+		//
+		// @Override
+		// public boolean accept(File dir, String name) {
+		// return name.matches("\\.xcf");
+		// }
+		// });
+
+		emInitialize();
+		
+		EncounterSetBaseDao dao = new EncounterSetBaseDao(em);
+		List<EncounterSetBase> esbList = dao.find(new EncounterSetBase());
+		for (EncounterSetBase esb : esbList) {
+			String fileName = esb.getTechName() + ".xcf";
+			File file = new File(dir, fileName);
+			if (file.exists()) {
+				String newFileName = StringUtils.leftPad(
+						esb.getCardSetBase().getSequence().toString(), 3, '0') + "-" + fileName;
+				file.renameTo(new File(dir, newFileName));
+			}
 		}
 	}
 
@@ -165,7 +194,7 @@ public class JsonDataLoader extends AbstractLoader {
 	public void importDatabaseFromJson() throws IOException {
 		emInitialize();
 
-		langItemsOnly = false;
+		langItemsOnly = true;
 
 		beginTransaction();
 		if (PROC_DOMAIN) {
