@@ -60,7 +60,7 @@ public class JsonDataLoader extends AbstractLoader {
 			DATA_BASE = home + "/data/";
 			IMAGE_BASE = home + "/image/";
 		}
-		JSON_BASE = DATA_BASE + "json-encset-icons/";
+		JSON_BASE = DATA_BASE + "json-encset/";
 		createDirectory(DATA_BASE);
 		createDirectory(IMAGE_BASE);
 		createDirectory(JSON_BASE);
