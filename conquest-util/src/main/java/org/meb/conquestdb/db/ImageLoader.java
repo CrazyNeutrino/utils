@@ -8,12 +8,18 @@ import java.io.OutputStream;
 import java.net.MalformedURLException;
 import java.net.URL;
 import java.net.URLConnection;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 
 import org.apache.commons.collections4.Predicate;
 import org.apache.commons.io.IOUtils;
 import org.apache.commons.lang.StringUtils;
 import org.meb.conquest.db.model.CardBase;
+import org.meb.conquest.db.model.CardSetBase;
+import org.meb.conquest.db.model.CardType;
 import org.meb.conquest.db.util.Utils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -30,6 +36,51 @@ public class ImageLoader extends AbstractLoader {
 	protected static final String IMAGE_BASE;
 	protected static final String IMAGE_BASE_BORWOL;
 	protected static final String IMAGE_BASE_CARDGAME_DB;
+	
+	private class ImageInfo {
+		private String url;
+		private String fileName;
+		private String dirName;
+	}
+
+	private class ImageLoadTask implements Runnable {
+
+		private ImageInfo imageInfo;
+
+		private ImageLoadTask(ImageInfo imageInfo) {
+			this.imageInfo = imageInfo;
+		}
+
+		@Override
+		public void run() {
+			try {
+				URLConnection connection = new URL(imageInfo.url).openConnection();
+				connection.setRequestProperty("Referer", "http://deckbauer.telfador.net/");
+				connection.setRequestProperty("User-agent",
+						"Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/37.0.2062.120 Safari/537.36");
+				InputStream inputStream = connection.getInputStream();
+
+				File dir = new File(IMAGE_BASE + "_raw/card/de/" + imageInfo.dirName);
+				File file = new File(dir, imageInfo.fileName);
+				if (file.exists()) {
+					return;
+				}
+
+				synchronized (ImageLoader.this) {
+					if (!dir.exists()) {
+						dir.mkdir();
+					}
+				}
+
+				OutputStream outputStream = new FileOutputStream(file);
+				IOUtils.copy(inputStream, outputStream);
+				IOUtils.closeQuietly(outputStream);
+				IOUtils.closeQuietly(inputStream);
+			} catch (Exception e) {
+				log.error("Unable to get {}\n\t{}", imageInfo.url, e.getMessage());
+			}
+		}
+	};
 
 	static {
 		String home = System.getProperty("home");
@@ -53,6 +104,8 @@ public class ImageLoader extends AbstractLoader {
 				loader.loadFromBorwol();
 			} else if (args[0].equals("--load-images-cgdb")) {
 				loader.loadFromCGDB();
+			} else if (args[0].equals("--load-images-deckbauer")) {
+				loader.loadFromDeckbauer();
 			} else {
 				throw new IllegalArgumentException("Invalid argument");
 			}
@@ -152,5 +205,88 @@ public class ImageLoader extends AbstractLoader {
 				e.printStackTrace();
 			}
 		}
+	}
+	
+	public void loadFromDeckbauer() throws MalformedURLException, IOException {
+		emInitialize();
+
+		beginTransaction();
+
+		StringBuilder myLog = new StringBuilder();
+
+		List<CardSetBase> csbList = readCardSetsFromDatabase();
+		// Map<String, CardSetBase> csbMap = Maps.uniqueIndex(csbList,
+		// Functions.CardSetBaseTechName);
+		List<CardBase> cbList = readCardsFromDatabase();
+		// Map<String, CardBase> cbMap = Maps.uniqueIndex(cbList,
+		// Functions.CardBaseComposite);
+
+		final List<ImageInfo> imageInfos = new ArrayList<>();
+
+		try {
+			for (CardBase cb : readCardsFromDatabase()) {
+				CardSetBase csb = cb.getCardSetBase();
+				String crstTechName = csb.getTechName();
+				String cycleTechName = null;
+				if (csb.getCycleBase() != null) {
+					cycleTechName = csb.getCycleBase().getTechName();
+				}
+
+				String packNumber;
+				if (crstTechName.equals("core-set")) {
+					packNumber = "001";
+				} else if ("warlord-cycle".equals(cycleTechName)) {
+					packNumber = "002";
+				} else if (crstTechName.equals("the-great-devourer")) {
+					packNumber = "003";
+				} else if ("planetfall-cycle".equals(cycleTechName)) {
+					packNumber = "004";
+				} else {
+					continue;
+				}
+
+				boolean warlord = cb.getType() == CardType.WARLORD;
+				imageInfos.add(createImageInfo(crstTechName, csb.getSequence(), cb.getTechName(),
+						cb.getNumber(), packNumber, warlord, false));
+				if (warlord) {
+					imageInfos.add(createImageInfo(crstTechName, csb.getSequence(),
+							cb.getTechName(), cb.getNumber(), packNumber, warlord, true));
+				}
+			}
+
+			ExecutorService service = Executors.newFixedThreadPool(20);
+			for (ImageInfo imageInfo : imageInfos) {
+				service.execute(new ImageLoadTask(imageInfo));
+			}
+
+			try {
+				service.shutdown();
+				service.awaitTermination(30, TimeUnit.SECONDS);
+			} catch (InterruptedException e) {
+				throw new RuntimeException(e);
+			}
+
+			endTransaction(false);
+		} finally {
+			log.info(myLog.toString());
+		}
+	}
+
+	private ImageInfo createImageInfo(String crstTechName, Integer crstSequence,
+			String cardTechName, Integer cardNumber, String packPrefix, boolean warlord, boolean back) {
+
+		String tmp = warlord ? (back ? "b" : "a") : "";
+		String url = "http://deckbauer.telfador.net/assets/cardgames/whc/" + packPrefix + "/"
+				+ StringUtils.leftPad(cardNumber.toString(), 3, "0") + tmp + ".png";
+
+		ImageInfo ii = new ImageInfo();
+		ii.url = url;
+		ii.fileName = StringUtils.leftPad(cardNumber.toString(), 3, "0") + "-" + cardTechName;
+		if (back) {
+			ii.fileName += "-b";
+		}
+		ii.fileName += "." + ii.url.substring(ii.url.lastIndexOf('.') + 1).toLowerCase();
+		ii.dirName = StringUtils.leftPad(crstSequence.toString(), 2, "0") + "-" + crstTechName;
+		return ii;
 	}
 }

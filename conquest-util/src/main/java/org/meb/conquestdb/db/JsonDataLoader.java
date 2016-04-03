@@ -3,20 +3,17 @@ package org.meb.conquestdb.db;
 import java.io.File;
 import java.io.FilenameFilter;
 import java.io.IOException;
-import java.util.Collection;
-import java.util.Date;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
-import org.apache.commons.collections4.CollectionUtils;
 import org.apache.commons.collections4.MapUtils;
 import org.apache.commons.collections4.Predicate;
 import org.apache.commons.collections4.Transformer;
-import org.apache.commons.lang3.ArrayUtils;
 import org.apache.commons.lang3.StringUtils;
-import org.apache.commons.math3.util.MathArrays;
 import org.codehaus.jackson.JsonProcessingException;
 import org.meb.conquest.db.dao.CardSetBaseDao;
 import org.meb.conquest.db.dao.JpaDao;
@@ -24,20 +21,17 @@ import org.meb.conquest.db.model.CardBase;
 import org.meb.conquest.db.model.CardLang;
 import org.meb.conquest.db.model.CardSetBase;
 import org.meb.conquest.db.model.CycleBase;
-import org.meb.conquest.db.model.Deck;
-import org.meb.conquest.db.model.DeckLink;
-import org.meb.conquest.db.model.DeckMember;
-import org.meb.conquest.db.model.DeckType;
 import org.meb.conquest.db.model.DomainBase;
+import org.meb.conquest.db.model.DomainLang;
 import org.meb.conquest.db.model.IBase;
 import org.meb.conquest.db.model.ILang;
 import org.meb.conquest.db.model.loc.Card;
 import org.meb.conquest.db.query.CardQuery;
-import org.meb.conquest.db.query.DeckQuery;
-import org.meb.conquest.db.util.Transformers;
 import org.meb.conquest.db.util.Utils;
 import org.meb.conquestdb.db.util.JpaUtils;
 import org.meb.conquestdb.json.JsonUtils;
+import org.meb.conquestdb.proc.DomainTemplateProcessor;
+import org.meb.conquestdb.proc.LanguageTemplateProcessor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -46,7 +40,7 @@ import lombok.Setter;
 public class JsonDataLoader extends AbstractLoader {
 
 	private static final Logger log = LoggerFactory.getLogger(JsonDataLoader.class);
-	
+
 	protected static final String DATA_BASE;
 	protected static final String JSON_BASE;
 	protected static final String IMAGE_BASE;
@@ -63,7 +57,7 @@ public class JsonDataLoader extends AbstractLoader {
 			DATA_BASE = home + "/data/";
 			IMAGE_BASE = home + "/image/";
 		}
-		JSON_BASE = DATA_BASE + "json-wlb2/";
+		JSON_BASE = DATA_BASE + "json-french2/";
 		createDirectory(DATA_BASE);
 		createDirectory(IMAGE_BASE);
 		createDirectory(JSON_BASE);
@@ -86,8 +80,6 @@ public class JsonDataLoader extends AbstractLoader {
 	private static final boolean PROC_CARD_SET = Boolean
 			.valueOf(System.getProperty("data.proc.cardset"));
 	private static final boolean PROC_CARD = Boolean.valueOf(System.getProperty("data.proc.card"));
-	private static final boolean DEV_ENV = Boolean.valueOf(System.getProperty("dev.env"));
-
 
 	@Setter
 	private boolean langItemsOnly = false;
@@ -101,15 +93,10 @@ public class JsonDataLoader extends AbstractLoader {
 				loader.exportDatabaseToJson();
 			} else if (args[0].equals("--rename-borwol")) {
 				loader.renameBorwol();
-			} else if (args[0].equals("--generate-decks") && DEV_ENV) {
-				loader.generateDecks(Integer.parseInt(args[1]), Long.parseLong(args[2]),
-						Long.parseLong(args[3]));
-			} else if (args[0].equals("--publish-decks") && DEV_ENV) {
-				loader.publishDecks(Integer.parseInt(args[1]));
 			} else if (args[0].equals("--update-trait-keyword")) {
 				loader.updateTraitAndKeyword();
-			} else if (args[0].equals("--update-trait-keyword")) {
-				loader.updateTraitAndKeyword();
+			} else if (args[0].equals("--import-french-names")) {
+				loader.importFrenchNames();
 			} else {
 				throw new IllegalArgumentException("Invalid argument");
 			}
@@ -118,7 +105,90 @@ public class JsonDataLoader extends AbstractLoader {
 		}
 	}
 
+	private void importFrenchNames() {
+
+		beginTransaction();
+
+		String dirName = "d:\\W40K CoreSet";
+		File dir = new File(dirName);
+
+		String[] fileNames = dir.list(new FilenameFilter() {
+
+			@Override
+			public boolean accept(File dir, String name) {
+				return !name.matches(".*\\-b\\.png") && !name.matches(".*\\-b\\.jpg")
+						&& name.matches("[0-9]{3}.*");
+			}
+		});
+
+		Map<Integer, String> nameMap = new HashMap<>();
+		for (String fileName : fileNames) {
+			Integer number = Integer.valueOf(fileName.substring(0, 3));
+			String name = fileName.substring(4).replace(".png", "").replace(".jpg", "");
+			// System.out.println(number + " " + name);
+			nameMap.put(number, name);
+		}
+
+		List<CardBase> cbList = readCardsFromDatabase(new Predicate<CardBase>() {
+
+			@Override
+			public boolean evaluate(CardBase cb) {
+				// CycleBase ccb = cb.getCardSetBase().getCycleBase();
+				// if (ccb == null) {
+				// return false;
+				// } else {
+				// return "warlord-cycle".equals(ccb.getTechName());
+				// }
+				return cb.getCardSetBase().getTechName().equals("core-set");
+			}
+
+		});
+
+		Map<Integer, String> techNameMap = new HashMap<>();
+		for (CardBase cb : cbList) {
+			String frenchName = nameMap.get(cb.getNumber());
+			if (frenchName != null) {
+				String langCode = "fr";
+				CardLang cl = cb.getLangItems().get(langCode);
+				if (cl == null) {
+					cl = new CardLang(langCode);
+					cl.setImageLangCode(langCode);
+					cl.setName(frenchName);
+					cl.setRecordState("A");
+					cl.setBase(cb);
+					cb.getLangItems().put(langCode, cl);
+
+					persist(cb);
+				}
+			}
+			techNameMap.put(cb.getNumber(), cb.getTechName());
+		}
+
+		// rename
+		File[] files = dir.listFiles(new FilenameFilter() {
+
+			@Override
+			public boolean accept(File dir, String name) {
+				return name.matches("[0-9]{3}.*");
+			}
+		});
+
+		for (File file : files) {
+			String name = file.getName();
+			String bloodied = name.indexOf("-b") != -1 ? "-b" : "";
+			String ext = name.substring(name.lastIndexOf('.') + 1);
+			Integer number = Integer.valueOf(name.substring(0, 3));
+			String newName = StringUtils.leftPad(Integer.toString(number), 3, "0") + "-"
+					+ techNameMap.get(number) + bloodied + "." + ext;
+			// System.out.println(name + " -> " + newName);
+			file.renameTo(new File(dir, newName));
+		}
+
+		endTransaction(true);
+	}
+
 	private void updateTraitAndKeyword() {
+		emInitialize();
 		beginTransaction();
 
 		Map<String, DomainBase> domainsByValue = new HashMap<String, DomainBase>();
@@ -137,13 +207,9 @@ public class JsonDataLoader extends AbstractLoader {
 				+ " left outer join cqt_card_l card_pl on card.id = card_pl.card_id and card_pl.lang_code = 'pl'";
 		List<Object[]> results = em.createNativeQuery(sql).getResultList();
 
-		// List<CardBase> cbList = readCardsFromDatabase();
+		Set<String> missingEnDescriptions = new HashSet<>();
 		for (Object[] result : results) {
-			// if (!cb.getLangItems().containsKey("en") ||
-			// !cb.getLangItems().containsKey("pl")) {
-			// continue;
-			// }
-
+			String techName = (String) result[1];
 			String enTraitString = (String) result[4];
 			String plTraitString = (String) result[5];
 			if (StringUtils.isBlank(enTraitString) || StringUtils.isBlank(plTraitString)) {
@@ -161,8 +227,8 @@ public class JsonDataLoader extends AbstractLoader {
 			}
 
 			if (enTraits.length != plTraits.length) {
-				myLog.append("mismatch: ").append(enTraitString).append(" # ").append(plTraitString)
-						.append("\n");
+				myLog.append("mismatch: en|").append(enTraitString).append(" pl|")
+						.append(plTraitString).append(" [ ").append(techName).append(" ]\n");
 				continue;
 			}
 
@@ -171,43 +237,50 @@ public class JsonDataLoader extends AbstractLoader {
 				DomainBase db = domainsByValue.get(value);
 				if (db != null) {
 					if (!db.getLangItems().containsKey("en")) {
-						myLog.append("missing en: ").append(value).append(" -> ").append(enTrait)
-								.append("\n");
+						myLog.append("missing: en|: ").append(value).append(" -> ").append(enTrait)
+								.append(" [ ").append(techName).append(" ]\n");
+						missingEnDescriptions.add(enTrait);
 					}
 					if (!db.getLangItems().containsKey("pl")) {
-						myLog.append("missing pl: ").append(value).append("\n");
+						myLog.append("missing: pl|").append(value).append(" [ ").append(techName)
+								.append(" ]\n");
 					}
+				} else {
+					myLog.append("missing: en|: ").append(value).append(" -> ").append(enTrait)
+							.append(" [ ").append(techName).append(" ]\n");
+					missingEnDescriptions.add(enTrait);
 				}
 			}
 		}
 
-		// for (String description : descriptions) {
-		// String value = Utils.toTechName(description);
-		//
-		// DomainBase db = new DomainBase();
-		// db.setDomain("trait");
-		// db.setValue(value);
-		// db = dbDao.findUnique(db);
-		// if (db == null) {
-		// db = new DomainBase();
-		// db.setDomain("trait");
-		// db.setValue(value);
-		// db.setRecordState("A");
-		// DomainLang dl = new DomainLang();
-		// dl.setDescription(description);
-		// dl.setLangCode("en");
-		// dl.setRecordState("A");
-		// dl.setBase(db);
-		// db.getLangItems().put("en", dl);
-		// log.info("persisting domain: {}, {}", description, value);
-		// myLog.append(description).append("\t->\t").append(value).append("\n");
-		// // em.persist(db);
-		// }
-		// }
+		for (String description : missingEnDescriptions) {
+			String value = Utils.toTechName(description);
+
+			DomainBase db = new DomainBase();
+			db.setDomain("trait");
+			db.setValue(value);
+			db = dbDao.findUnique(db);
+			if (db == null) {
+				db = new DomainBase();
+				db.setDomain("trait");
+				db.setValue(value);
+				db.setRecordState("A");
+				DomainLang dl = new DomainLang();
+				dl.setDescription(description);
+				dl.setLangCode("en");
+				dl.setRecordState("A");
+				dl.setBase(db);
+				db.getLangItems().put("en", dl);
+				log.info("persisting domain: {}, {}", description, value);
+				myLog.append(description).append("\t->\t").append(value).append("\n");
+				em.persist(db);
+			}
+		}
 
 		log.info(myLog.toString());
 
-		endTransaction();
+		endTransaction(true);
+		emFinalize();
 
 		// if (DEV_ENV) {
 		//
@@ -330,170 +403,9 @@ public class JsonDataLoader extends AbstractLoader {
 		}
 	}
 
-	private void generateDecks(int deckCount, long userIdMin, long userIdMax) {
-
-		// beginTransaction();
-		//
-		// List<Deck> decks = new JpaDao<Deck, DeckQuery>(em).find(new Deck());
-		// for (Deck deck : decks) {
-		// em.remove(deck);
-		// em.flush();
-		// }
-		//
-		// int maxDeckCount = 1000;
-		// if (deckCount > maxDeckCount) {
-		// throw new RuntimeException("Are you nuts?!");
-		// }
-		//
-		// Card warlordExample = new Card();
-		// warlordExample.setType(CardType.WARLORD);
-		// JpaDao<Card, CardQuery> cardDao = new JpaDao<>(em);
-		// List<Card> warlords = cardDao.find(warlordExample);
-		//
-		// int padSize = (int) Math.floor(Math.log10(maxDeckCount));
-		//
-		// for (long userId = userIdMin; userId <= userIdMax; userId++) {
-		//
-		// for (int i = 0; i < deckCount; i++) {
-		// Card warlord = warlords.get(RandomUtils.nextInt(warlords.size()));
-		//
-		// Card cardExample = new Card();
-		// CardQuery cardQuery = new CardQuery(cardExample);
-		// cardQuery.setDeckFaction(warlord.getFaction());
-		// cardQuery.setDeckWarlordId(warlord.getId());
-		// List<Card> cards = new CardDao(em).find(cardQuery);
-		// Collections.shuffle(cards);
-		//
-		// Deck deck = new Deck();
-		// deck.setName(StringUtils.leftPad(String.valueOf(i), padSize, '0') +
-		// " - "
-		// + RandomStringUtils.randomAlphabetic(20));
-		// log.info(deck.getName());
-		// deck.setUserId(userId);
-		// Date date = new Date();
-		// deck.setCreateDate(date);
-		// deck.setModifyDate(date);
-		// deck.setWarlord(warlord);
-		//
-		// HashSet<Faction> validFactions = new HashSet<Faction>();
-		// validFactions.add(warlord.getFaction());
-		// validFactions.add(Faction.NEUTRAL);
-		//
-		// int totalQuantity = 0;
-		// for (Card card : cards) {
-		// if (validFactions.size() == 2) {
-		// validFactions.add(card.getFaction());
-		// } else if (!validFactions.contains(card.getFaction())) {
-		// continue;
-		// }
-		//
-		// double bonus = card.getFaction() == warlord.getFaction() ? 0.3 : 0.0;
-		// double value = RandomUtils.nextDouble() + bonus;
-		// int quantity = 0;
-		//
-		// Integer cardQuantity = (Integer) ObjectUtils.defaultIfNull(3, new
-		// Integer(3));
-		//
-		// boolean flagWarlord = card.getId().equals(warlord.getId());
-		// boolean flagSignatureSquad = card.getWarlordId() != null;
-		// if (flagWarlord || flagSignatureSquad) {
-		// quantity = 1;
-		// } else if (value > 0.8) {
-		// quantity = 3;
-		// } else if (value > 0.6) {
-		// quantity = 2;
-		// } else if (value > 0.5) {
-		// quantity = 1;
-		// } else {
-		// continue;
-		// }
-		//
-		// if (totalQuantity < 50 || flagWarlord || flagSignatureSquad) {
-		// quantity = Math.min(quantity, cardQuantity);
-		// totalQuantity += quantity;
-		//
-		// DeckMember deckMember = new DeckMember();
-		// deckMember.setQuantity(quantity);
-		// deckMember.setCard(card);
-		// deckMember.setDeck(deck);
-		// deck.getDeckMembers().add(deckMember);
-		// }
-		// }
-		//
-		// em.persist(deck);
-		// em.flush();
-		// }
-		// }
-		//
-		// endTransaction();
-	}
-
-	public void publishDecks(int deckCount) {
-		beginTransaction();
-
-		Deck example = new Deck(DeckType.SNAPSHOT);
-		List<Deck> decks = new JpaDao<Deck, DeckQuery>(em).find(example);
-		for (Deck deck : decks) {
-			em.remove(deck);
-			em.flush();
-		}
-
-		example = new Deck(DeckType.BASE);
-		decks = new JpaDao<Deck, DeckQuery>(em).find(example);
-		Collection<Integer> deckIds = CollectionUtils.collect(decks,
-				new Transformer<Deck, Integer>() {
-
-					@Override
-					public Integer transform(Deck deck) {
-						return deck.getId().intValue();
-					}
-				});
-
-		Map<Long, Deck> decksMap = new HashMap<>();
-		MapUtils.populateMap(decksMap, decks, Transformers.DECK_ID);
-
-		int[] deckIdsArray = ArrayUtils.toPrimitive(deckIds.toArray(new Integer[deckIds.size()]));
-		MathArrays.shuffle(deckIdsArray);
-		int publishedCount = 0;
-		for (int deckId : deckIdsArray) {
-			Deck deck = decksMap.get(new Long(deckId));
-			int quantity = 0;
-			for (DeckMember deckMember : deck.getDeckMembers()) {
-				quantity += deckMember.getQuantity();
-			}
-			if (quantity >= 50) {
-				em.detach(deck);
-				deck.setId(null);
-				deck.setVersion(null);
-				deck.setSnapshotBase(em.find(Deck.class, new Long(deckId)));
-				deck.setSnapshotPublic(Boolean.TRUE);
-				Date date = new Date();
-				deck.setCreateDate(date);
-				deck.setModifyDate(date);
-				deck.setType(DeckType.SNAPSHOT);
-				deck.setDeckLinks(new HashSet<DeckLink>());
-				deck.setDeckMembers(new HashSet<DeckMember>(deck.getDeckMembers()));
-				for (DeckMember deckMember : deck.getDeckMembers()) {
-					deckMember.setId(null);
-					deckMember.setVersion(null);
-				}
-				em.persist(deck);
-				em.flush();
-
-				if (++publishedCount >= deckCount) {
-					break;
-				}
-			}
-		}
-
-		endTransaction();
-	}
-
-	public JsonDataLoader() {
-
-	}
-
 	public void importDatabaseFromJson() throws IOException {
+		emInitialize();
+
 		langItemsOnly = false;
 
 		beginTransaction();
@@ -510,22 +422,21 @@ public class JsonDataLoader extends AbstractLoader {
 			writeCardsToDatabase();
 		}
 		endTransaction(true);
+
+		emFinalize();
 	}
 
 	public void exportDatabaseToJson() throws IOException {
+		emInitialize();
+
 		if (PROC_DOMAIN) {
-			// Predicate<DomainBase> keepPredicate = new Predicate<DomainBase>()
-			// {
-			//
-			// @Override
-			// public boolean evaluate(DomainBase db) {
-			// // return !db.getLangItems().containsKey("pl");
-			// return db.getDomain().equals("trait");
-			// }
-			//
-			// };
 			List<DomainBase> dbList = readDomainsFromDatabase();
-			writeDomainsToJsonFile(dbList);
+			DomainTemplateProcessor processor = new DomainTemplateProcessor("fr");
+			List<DomainBase> dbListProcessed = new ArrayList<>();
+			for (DomainBase db : dbList) {
+				dbListProcessed.add(processor.process(db));
+			}
+			writeDomainsToJsonFile(dbListProcessed);
 		}
 		if (PROC_CYCLE) {
 			List<CycleBase> ccbList = readCyclesFromDatabase();
@@ -536,29 +447,16 @@ public class JsonDataLoader extends AbstractLoader {
 			writeCardSetsToJsonFile(csbList);
 		}
 		if (PROC_CARD) {
-			Predicate<CardBase> keepPredicate = new Predicate<CardBase>() {
-
-				@Override
-				public boolean evaluate(CardBase cb) {
-					return cb.getCardSetBase().getTechName().equals("what-lurks-below");
-					// return true;
-				}
-
-			};
-			List<CardBase> cbList = readCardsFromDatabase(keepPredicate);
+			List<CardBase> cbList = readCardsFromDatabase();
+			LanguageTemplateProcessor processor = new LanguageTemplateProcessor("fr");
+			List<CardBase> cbListProcessed = new ArrayList<>();
 			for (CardBase cb : cbList) {
-				if (cb.getLangItems().get("pl") == null) {
-					CardLang cl = new CardLang("pl");
-					cl.setName(" ");
-					cl.setTrait(" ");
-					cl.setImageLangCode("pl");
-					cl.setRecordState("A");
-					cb.getLangItems().put("pl", cl);
-				}
+				cbListProcessed.add(processor.process(cb));
 			}
-			writeCardsToJsonFile(cbList);
+			writeCardsToJsonFile(cbListProcessed);
 		}
 
+		emFinalize();
 	}
 
 	public void writeDomainsToDatabase() throws IOException {

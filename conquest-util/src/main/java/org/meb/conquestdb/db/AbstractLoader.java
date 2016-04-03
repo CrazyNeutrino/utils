@@ -29,13 +29,20 @@ public abstract class AbstractLoader {
 
 	private boolean globalRollback = true;
 
-	public AbstractLoader() {
+	protected void emInitialize() {
 		EntityManagerFactory emf = Persistence.createEntityManagerFactory("conquest-pu");
 		em = emf.createEntityManager();
 		dbDao = new DomainBaseDao(em);
 		ccbDao = new CycleBaseDao(em);
 		csbDao = new CardSetBaseDao(em);
 		cbDao = new CardBaseDao(em);
+	}
+
+	protected void emFinalize() {
+		if (em != null) {
+			em.getEntityManagerFactory().close();
+			em = null;
+		}
 	}
 
 	protected static void mkdir(String name) {
@@ -65,7 +72,7 @@ public abstract class AbstractLoader {
 	}
 
 	protected void cleanUp() {
-		em.getEntityManagerFactory().close();
+		emFinalize();
 	}
 
 	public List<DomainBase> readDomainsFromDatabase() {
