@@ -15,11 +15,11 @@ public class DomainTemplateProcessor implements DomainBaseProcessor {
 	}
 
 	@Override
-	public DomainBase process(DomainBase cb) {
-		DomainLang cl = cb.getLangItems().get(langCode);
-		DomainLang enCl = cb.getLangItems().get("en");
+	public DomainBase process(DomainBase db) {
+		DomainLang cl = db.getLangItems().get(langCode);
+		DomainLang enCl = db.getLangItems().get("en");
 
-		DomainBase output = cb.cloneWithIdentity();
+		DomainBase output = db.cloneWithIdentity();
 		DomainLang outputCl = new DomainLang(langCode);
 		DomainLang outputEnCl = new DomainLang("en");
 
