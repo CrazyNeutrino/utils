@@ -30,8 +30,8 @@ import org.meb.conquest.db.query.CardQuery;
 import org.meb.conquest.db.util.Utils;
 import org.meb.conquestdb.db.util.JpaUtils;
 import org.meb.conquestdb.json.JsonUtils;
+import org.meb.conquestdb.pred.CardSetMatchPredicate;
 import org.meb.conquestdb.proc.DomainTemplateProcessor;
-import org.meb.conquestdb.proc.LanguageTemplateProcessor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -57,7 +57,7 @@ public class JsonDataLoader extends AbstractLoader {
 			DATA_BASE = home + "/data/";
 			IMAGE_BASE = home + "/image/";
 		}
-		JSON_BASE = DATA_BASE + "json-french2/";
+		JSON_BASE = DATA_BASE + "json-new/";
 		createDirectory(DATA_BASE);
 		createDirectory(IMAGE_BASE);
 		createDirectory(JSON_BASE);
@@ -447,13 +447,15 @@ public class JsonDataLoader extends AbstractLoader {
 			writeCardSetsToJsonFile(csbList);
 		}
 		if (PROC_CARD) {
-			List<CardBase> cbList = readCardsFromDatabase();
-			LanguageTemplateProcessor processor = new LanguageTemplateProcessor("fr");
-			List<CardBase> cbListProcessed = new ArrayList<>();
-			for (CardBase cb : cbList) {
-				cbListProcessed.add(processor.process(cb));
-			}
-			writeCardsToJsonFile(cbListProcessed);
+			List<CardBase> cbList = readCardsFromDatabase(
+					new CardSetMatchPredicate("unforgiven", "slash-and-burn"));
+			// LanguageTemplateProcessor processor = new
+			// LanguageTemplateProcessor("fr");
+			// List<CardBase> cbListProcessed = new ArrayList<>();
+			// for (CardBase cb : cbList) {
+			// cbListProcessed.add(processor.process(cb));
+			// }
+			writeCardsToJsonFile(cbList);
 		}
 
 		emFinalize();

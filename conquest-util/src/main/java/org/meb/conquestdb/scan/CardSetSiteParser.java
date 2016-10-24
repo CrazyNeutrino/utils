@@ -24,9 +24,8 @@ public class CardSetSiteParser {
 			// List<CardSetInfo> csInfos = new
 			// CardSetSiteParser().parseCardSetUrls();
 			List<CardSetInfo> csInfos = new ArrayList<CardSetInfo>();
-			csInfos.add(new CardSetInfo(
-					"Deadly Salvage",
-					"http://www.cardgamedb.com/index.php/wh40kconquest/conquest.html/_/planetfall-cycle/deadly-salvage/"));
+			csInfos.add(new CardSetInfo("Slash and Burn",
+					"http://www.cardgamedb.com/index.php/wh40kconquest/conquest.html/_/death-world-cycle/slash-and-burn/"));
 			CardHandlerChain chain = new CardHandlerChain();
 			chain.addCardHandler(new WriteLogCardHandler());
 			WriteJsonCardHandler jsonHandler = new WriteJsonCardHandler("en");
@@ -50,7 +49,7 @@ public class CardSetSiteParser {
 		int count = 0;
 
 		Iterator<Element> iter = tdSets.iterator();
-		while (iter.hasNext()/* && count++ < 2*/) {
+		while (iter.hasNext()/* && count++ < 2 */) {
 			Element tdSet = iter.next();
 			Elements aSets = tdSet.select("ol > li > a");
 			if (aSets.size() == 0) {
@@ -64,7 +63,8 @@ public class CardSetSiteParser {
 				String name = aSet.text();
 				log.info("card set: {} -> {}", name, url);
 				// String f =
-				// "[{\"en\": [\"%1$s\", \"%2$s\"], \"pl\": [\"\", \"\"], \"de\": [\"\", \"\"]}]";
+				// "[{\"en\": [\"%1$s\", \"%2$s\"], \"pl\": [\"\", \"\"],
+				// \"de\": [\"\", \"\"]}]";
 				// System.out.println(String.format(f,
 				// cardSetNameToSymbol(aSet.text()), aSet.text()));
 				csInfos.add(new CardSetInfo(name, url));

@@ -36,7 +36,7 @@ public class ImageLoader extends AbstractLoader {
 	protected static final String IMAGE_BASE;
 	protected static final String IMAGE_BASE_BORWOL;
 	protected static final String IMAGE_BASE_CARDGAME_DB;
-	
+
 	private class ImageInfo {
 		private String url;
 		private String fileName;
@@ -87,14 +87,14 @@ public class ImageLoader extends AbstractLoader {
 		if (StringUtils.isBlank(home)) {
 			throw new IllegalStateException("Home not set");
 		}
-		
+
 		if (home.trim().endsWith("/")) {
 			IMAGE_BASE = home.trim() + "image/";
 		} else {
 			IMAGE_BASE = home.trim() + "/image/";
 		}
-		IMAGE_BASE_BORWOL = IMAGE_BASE + "_raw_/card/pl/borwol/";
-		IMAGE_BASE_CARDGAME_DB = IMAGE_BASE + "_raw_/card/en/cgdb/";
+		IMAGE_BASE_BORWOL = IMAGE_BASE + "_raw/card/pl/borwol/";
+		IMAGE_BASE_CARDGAME_DB = IMAGE_BASE + "_raw/card/en/cgdb/";
 	}
 
 	public static void main(String[] args) throws IOException {
@@ -119,17 +119,20 @@ public class ImageLoader extends AbstractLoader {
 
 		List<CardBase> cards = readCardsFromDatabase();
 		for (CardBase card : cards) {
-			String crstPathPart = StringUtils.leftPad(card.getCardSetBase().getSequence().toString(), 2, "0");
+			String crstPathPart = StringUtils
+					.leftPad(card.getCardSetBase().getSequence().toString(), 2, "0");
 			crstPathPart += "-" + card.getCardSetBase().getTechName();
-			String urlCardPathPart = StringUtils.leftPad(card.getNumber().toString(), 3, "0") + ".png";
+			String urlCardPathPart = StringUtils.leftPad(card.getNumber().toString(), 3, "0")
+					+ ".png";
 			String fileCardPathPart = StringUtils.leftPad(card.getNumber().toString(), 3, "0");
 			fileCardPathPart += "-" + card.getTechName() + ".png";
 
-			String urlString = "http://podboj.znadplanszy.pl/wp-content/uploads/sites/56/2014/09/" + urlCardPathPart;
+			String urlString = "http://podboj.znadplanszy.pl/wp-content/uploads/sites/56/2014/09/"
+					+ urlCardPathPart;
 			// InputStream inputStream = new URL(urlString).openStream();
 
 			File file = new File(IMAGE_BASE_BORWOL + crstPathPart + "/" + fileCardPathPart);
-			if (/*card.getNumber() < 50 || card.getNumber() > 80 || */file.exists()) {
+			if (/* card.getNumber() < 50 || card.getNumber() > 80 || */file.exists()) {
 				continue;
 			}
 
@@ -146,9 +149,8 @@ public class ImageLoader extends AbstractLoader {
 				URLConnection connection = new URL(urlString).openConnection();
 				connection.setRequestProperty("Referer",
 						"http://podboj.znadplanszy.pl/2014/09/15/warhammer-40000-podboj-tau-pl/");
-				connection
-						.setRequestProperty("User-agent",
-								"Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/37.0.2062.120 Safari/537.36");
+				connection.setRequestProperty("User-agent",
+						"Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/37.0.2062.120 Safari/537.36");
 				InputStream inputStream = connection.getInputStream();
 
 				OutputStream outputStream = new FileOutputStream(file);
@@ -164,19 +166,22 @@ public class ImageLoader extends AbstractLoader {
 	}
 
 	public void loadFromCGDB() throws MalformedURLException, IOException {
+		emInitialize();
+
 		Predicate<CardBase> keepPredicate = new Predicate<CardBase>() {
 
 			@Override
 			public boolean evaluate(CardBase cb) {
-				return cb.getCardSetBase().getTechName().equals("what-lurks-below");
+				return cb.getCardSetBase().getTechName().equals("slash-and-burn");
 			}
-			
+
 		};
 		List<CardBase> cards = readCardsFromDatabase(keepPredicate);
 		for (CardBase card : cards) {
-			String crstPathPart = StringUtils.leftPad(card.getCardSetBase().getSequence().toString(), 2, "0");
+			String crstPathPart = StringUtils
+					.leftPad(card.getCardSetBase().getSequence().toString(), 2, "0");
 			crstPathPart += "-" + Utils.techNameToAcronym(card.getCardSetBase().getTechName());
-			String urlCardPathPart = "med_WHK12_" + card.getNumber().toString() + ".jpg";
+			String urlCardPathPart = "med_WHK18_" + card.getNumber().toString() + ".jpg";
 			String fileCardPathPart = StringUtils.leftPad(card.getNumber().toString(), 3, "0");
 			fileCardPathPart += "-" + card.getTechName() + ".jpg";
 
@@ -206,7 +211,7 @@ public class ImageLoader extends AbstractLoader {
 			}
 		}
 	}
-	
+
 	public void loadFromDeckbauer() throws MalformedURLException, IOException {
 		emInitialize();
 
@@ -273,7 +278,8 @@ public class ImageLoader extends AbstractLoader {
 	}
 
 	private ImageInfo createImageInfo(String crstTechName, Integer crstSequence,
-			String cardTechName, Integer cardNumber, String packPrefix, boolean warlord, boolean back) {
+			String cardTechName, Integer cardNumber, String packPrefix, boolean warlord,
+			boolean back) {
 
 		String tmp = warlord ? (back ? "b" : "a") : "";
 		String url = "http://deckbauer.telfador.net/assets/cardgames/whc/" + packPrefix + "/"

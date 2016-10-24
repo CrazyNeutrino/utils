@@ -1,6 +1,5 @@
 package org.meb.conquestdb.db;
 
-import java.io.File;
 import java.io.IOException;
 import java.util.HashMap;
 import java.util.List;
@@ -8,6 +7,7 @@ import java.util.Map;
 
 import javax.xml.parsers.DocumentBuilder;
 import javax.xml.parsers.DocumentBuilderFactory;
+import javax.xml.parsers.ParserConfigurationException;
 
 import org.apache.commons.collections4.Predicate;
 import org.apache.commons.lang3.StringUtils;
@@ -24,13 +24,14 @@ import org.slf4j.LoggerFactory;
 import org.w3c.dom.Document;
 import org.w3c.dom.Element;
 import org.w3c.dom.NodeList;
+import org.xml.sax.SAXException;
 
 import lombok.Setter;
 
 public class OctgnDataLoader extends AbstractLoader {
 
 	private static final Logger log = LoggerFactory.getLogger(OctgnDataLoader.class);
-	
+
 	protected static final String DATA_BASE;
 
 	static {
@@ -43,18 +44,19 @@ public class OctgnDataLoader extends AbstractLoader {
 		} else {
 			DATA_BASE = home + "/data/";
 		}
-		
+
 		AbstractLoader.mkdir(DATA_BASE);
 	}
 
 	@Setter
 	private boolean langItemsOnly = false;
 
-	public static void main(String[] args) throws IOException {
+	public static void main(String[] args)
+			throws IOException, ParserConfigurationException, SAXException {
 		OctgnDataLoader loader = new OctgnDataLoader();
 		try {
 			if (args[0].equals("--update-octgn-ids")) {
-				loader.updateOctgnIds();
+				loader.updateOctgnIdsNew();
 			} else if (args[0].equals("--update-octgn-texts")) {
 				loader.updateOctgnTexts();
 			} else {
@@ -67,6 +69,112 @@ public class OctgnDataLoader extends AbstractLoader {
 
 	public OctgnDataLoader() {
 
+	}
+
+	public void updateOctgnIdsNew() throws ParserConfigurationException, SAXException, IOException {
+		emInitialize();
+
+		beginTransaction();
+
+		StringBuilder myLog = new StringBuilder();
+		Map<String, String> map = new HashMap<>();
+		final String crstOrCycleName = "Death World Cycle";
+		final String crstOrCycleTechName = Utils.toTechName(crstOrCycleName);
+
+		DocumentBuilder db = DocumentBuilderFactory.newInstance().newDocumentBuilder();
+		Document doc = db.parse(DATA_BASE + "/octgn/ids.xml");
+		NodeList setNodes = doc.getElementsByTagName("set");
+		Element setElem = null;
+		for (int i = 0; i < setNodes.getLength(); i++) {
+			setElem = (Element) setNodes.item(i);
+			if (setElem.getAttribute("name").equals(crstOrCycleName)) {
+				break;
+			} else {
+				setElem = null;
+			}
+		}
+
+		if (setElem == null) {
+			throw new IllegalStateException("Cycle or set not found");
+		}
+
+		NodeList cardNodes = setElem.getElementsByTagName("card");
+		for (int i = 0; i < cardNodes.getLength(); i++) {
+			Element cardElem = (Element) cardNodes.item(i);
+			String id = cardElem.getAttribute("id");
+			String name = cardElem.getAttribute("name");
+			String techName = Utils.toTechName(name);
+			System.out.println(id + "\t" + techName + "\t" + name);
+			if (StringUtils.isBlank(id)) {
+				continue;
+			}
+			if (map.containsKey(techName)) {
+				throw new IllegalStateException("Duplicate id");
+			}
+			map.put(techName, id);
+		}
+
+		Predicate<CardBase> keepPredicate = new Predicate<CardBase>() {
+
+			@Override
+			public boolean evaluate(CardBase cb) {
+				String crstTechName = cb.getCardSetBase().getTechName();
+				String cycleTechName = null;
+				if (cb.getCardSetBase().getCycleBase() != null) {
+					cycleTechName = cb.getCardSetBase().getCycleBase().getTechName();
+				}
+				return (crstOrCycleTechName.equals(crstTechName)
+						|| crstOrCycleTechName.equals(cycleTechName))
+						&& CardType.PLANET != cb.getType() && CardType.TOKEN != cb.getType();
+			}
+
+		};
+		List<CardBase> cbList = readCardsFromDatabase(keepPredicate);
+
+		String format = "%-25s";
+		int[] stats = new int[4];
+
+		for (CardBase cb : cbList) {
+			String techName = cb.getTechName();
+			String newOctgnId = map.get(techName);
+			String oldOctgnId = cb.getOctgnId();
+
+			if (StringUtils.isBlank(newOctgnId)) {
+				stats[0]++;
+				myLog.append(String.format(format, "missing new octgn id: "));
+				myLog.append(techName).append("\n");
+			} else if (oldOctgnId == null) {
+				stats[1]++;
+				cb.setOctgnId(map.get(techName));
+				myLog.append(String.format(format, "ids update: "));
+				myLog.append(techName).append(" -> ").append(newOctgnId).append("\n");
+				try {
+					em.flush();
+				} catch (RuntimeException e) {
+					System.out.println(myLog.toString());
+					throw e;
+				}
+			} else if (!newOctgnId.equals(oldOctgnId)) {
+				stats[2]++;
+				myLog.append(String.format(format, "ids mismatch: "));
+				myLog.append(techName).append(", was: ").append(oldOctgnId).append(", is: ")
+						.append(newOctgnId).append("\n");
+			} else {
+				stats[3]++;
+				myLog.append(String.format(format, "ids match: "));
+				myLog.append(techName).append("\n");
+			}
+		}
+
+		myLog.append("\n[SUMMARY]\n");
+		myLog.append(String.format(format, "missing new octgn id: ")).append(stats[0]).append("\n");
+		myLog.append(String.format(format, "ids update: ")).append(stats[1]).append("\n");
+		myLog.append(String.format(format, "ids mismatch: ")).append(stats[2]).append("\n");
+		myLog.append(String.format(format, "ids match: ")).append(stats[3]).append("\n");
+
+		System.out.println(myLog.toString());
+
+		endTransaction(true);
 	}
 
 	public void updateOctgnIds() {
