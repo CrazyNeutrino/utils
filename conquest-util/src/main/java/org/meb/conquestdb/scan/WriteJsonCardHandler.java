@@ -12,8 +12,9 @@ import org.meb.conquestdb.scan.model.Card;
 
 public class WriteJsonCardHandler implements CardHandler {
 
-	private final String[] BASE_PROPS = { "techName", "type", "faction", "number", "quantity", "cost", "shield",
-			"command", "attack", "hitPoints", "startingHandSize", "startingResources", "unique", "loyal", "illustrator" };
+	private final String[] BASE_PROPS = { "techName", "type", "faction", "number", "quantity",
+			"cost", "shield", "command", "attack", "hitPoints", "startingHandSize",
+			"startingResources", "unique", "loyal", "illustrator" };
 	private final String[] LANG_PROPS = { "name", "trait", "text", "flavourText" };
 
 	private JsonNodeFactory jsonFactory;
@@ -45,7 +46,8 @@ public class WriteJsonCardHandler implements CardHandler {
 
 		cardNode.putObject("cardSetBase").put("techName", Utils.toTechName(card.getSetName()));
 		if (card.getWarlordName() != null) {
-			cardNode.putObject("warlordBase").put("techName", Utils.toTechName(card.getWarlordName()));
+			cardNode.putObject("warlordBase").put("techName",
+					Utils.toTechName(card.getWarlordName()));
 		}
 		cardNode.put("recordState", "A");
 
@@ -61,6 +63,7 @@ public class WriteJsonCardHandler implements CardHandler {
 			}
 		}
 		enNode.put("recordState", "A");
+		enNode.put("imageLangCode", "en");
 		count++;
 	}
 

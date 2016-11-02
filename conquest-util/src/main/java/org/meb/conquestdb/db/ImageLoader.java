@@ -172,7 +172,7 @@ public class ImageLoader extends AbstractLoader {
 
 			@Override
 			public boolean evaluate(CardBase cb) {
-				return cb.getCardSetBase().getTechName().equals("slash-and-burn");
+				return cb.getCardSetBase().getTechName().equals("the-warp-unleashed");
 			}
 
 		};
@@ -181,7 +181,7 @@ public class ImageLoader extends AbstractLoader {
 			String crstPathPart = StringUtils
 					.leftPad(card.getCardSetBase().getSequence().toString(), 2, "0");
 			crstPathPart += "-" + Utils.techNameToAcronym(card.getCardSetBase().getTechName());
-			String urlCardPathPart = "med_WHK18_" + card.getNumber().toString() + ".jpg";
+			String urlCardPathPart = "med_WHK21_" + card.getNumber().toString() + ".jpg";
 			String fileCardPathPart = StringUtils.leftPad(card.getNumber().toString(), 3, "0");
 			fileCardPathPart += "-" + card.getTechName() + ".jpg";
 

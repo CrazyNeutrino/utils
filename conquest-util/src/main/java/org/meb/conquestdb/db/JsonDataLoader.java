@@ -447,8 +447,8 @@ public class JsonDataLoader extends AbstractLoader {
 			writeCardSetsToJsonFile(csbList);
 		}
 		if (PROC_CARD) {
-			List<CardBase> cbList = readCardsFromDatabase(
-					new CardSetMatchPredicate("unforgiven", "slash-and-burn"));
+			List<CardBase> cbList = readCardsFromDatabase(new CardSetMatchPredicate(
+					"searching-for-truth", "against-the-great-enemy", "the-warp-unleashed"));
 			// LanguageTemplateProcessor processor = new
 			// LanguageTemplateProcessor("fr");
 			// List<CardBase> cbListProcessed = new ArrayList<>();

@@ -24,8 +24,8 @@ public class CardSetSiteParser {
 			// List<CardSetInfo> csInfos = new
 			// CardSetSiteParser().parseCardSetUrls();
 			List<CardSetInfo> csInfos = new ArrayList<CardSetInfo>();
-			csInfos.add(new CardSetInfo("Slash and Burn",
-					"http://www.cardgamedb.com/index.php/wh40kconquest/conquest.html/_/death-world-cycle/slash-and-burn/"));
+			csInfos.add(new CardSetInfo("Unforgiven",
+					"http://www.cardgamedb.com/index.php/wh40kconquest/conquest.html/_/death-world-cycle/unforgiven/"));
 			CardHandlerChain chain = new CardHandlerChain();
 			chain.addCardHandler(new WriteLogCardHandler());
 			WriteJsonCardHandler jsonHandler = new WriteJsonCardHandler("en");
