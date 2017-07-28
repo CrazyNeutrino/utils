@@ -27,7 +27,7 @@
 			<property name="hibernate.connection.driver_class" value="com.mysql.jdbc.Driver" />
 			<property name="hibernate.connection.username" value="conquest_imp" />
 			<property name="hibernate.connection.password" value="glamdRING13-" />
-			<property name="hibernate.connection.url" value="jdbc:mysql://localhost:3307/conquest?useUnicode=true&amp;characterEncoding=utf8" />
+			<property name="hibernate.connection.url" value="jdbc:mysql://localhost:3306/conquest?useUnicode=true&amp;characterEncoding=utf8" />
 			<property name="hibernate.show_sql" value="true" />
 			<property name="hibernate.format_sql" value="true" />
 			<property name="hibernate.dialect" value="org.hibernate.dialect.MySQLDialect" />

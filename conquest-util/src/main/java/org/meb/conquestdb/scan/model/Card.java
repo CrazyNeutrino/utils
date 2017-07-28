@@ -31,6 +31,7 @@ public class Card {
 	private String flavourText;
 	private Boolean unique = false;
 	private Boolean loyal = false;
+	private String octgnId;
 
 	public Card(String type) {
 		this.type = type;

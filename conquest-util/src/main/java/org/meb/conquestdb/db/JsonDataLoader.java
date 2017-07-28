@@ -57,7 +57,7 @@ public class JsonDataLoader extends AbstractLoader {
 			DATA_BASE = home + "/data/";
 			IMAGE_BASE = home + "/image/";
 		}
-		JSON_BASE = DATA_BASE + "json-new/";
+		JSON_BASE = DATA_BASE + "json-apoka-ready/";
 		createDirectory(DATA_BASE);
 		createDirectory(IMAGE_BASE);
 		createDirectory(JSON_BASE);
@@ -447,8 +447,8 @@ public class JsonDataLoader extends AbstractLoader {
 			writeCardSetsToJsonFile(csbList);
 		}
 		if (PROC_CARD) {
-			List<CardBase> cbList = readCardsFromDatabase(new CardSetMatchPredicate(
-					"searching-for-truth", "against-the-great-enemy", "the-warp-unleashed"));
+			List<CardBase> cbList = readCardsFromDatabase(
+					new CardSetMatchPredicate("enemy-territory", "slash-and-burn"));
 			// LanguageTemplateProcessor processor = new
 			// LanguageTemplateProcessor("fr");
 			// List<CardBase> cbListProcessed = new ArrayList<>();

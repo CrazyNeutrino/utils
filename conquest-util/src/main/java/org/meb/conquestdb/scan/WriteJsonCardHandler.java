@@ -14,7 +14,7 @@ public class WriteJsonCardHandler implements CardHandler {
 
 	private final String[] BASE_PROPS = { "techName", "type", "faction", "number", "quantity",
 			"cost", "shield", "command", "attack", "hitPoints", "startingHandSize",
-			"startingResources", "unique", "loyal", "illustrator" };
+			"startingResources", "unique", "loyal", "illustrator", "octgnId" };
 	private final String[] LANG_PROPS = { "name", "trait", "text", "flavourText" };
 
 	private JsonNodeFactory jsonFactory;

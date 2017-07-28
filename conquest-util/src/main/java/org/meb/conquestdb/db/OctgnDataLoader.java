@@ -56,7 +56,7 @@ public class OctgnDataLoader extends AbstractLoader {
 		OctgnDataLoader loader = new OctgnDataLoader();
 		try {
 			if (args[0].equals("--update-octgn-ids")) {
-				loader.updateOctgnIdsNew();
+				loader.updateOctgnIds();
 			} else if (args[0].equals("--update-octgn-texts")) {
 				loader.updateOctgnTexts();
 			} else {
@@ -178,15 +178,17 @@ public class OctgnDataLoader extends AbstractLoader {
 	}
 
 	public void updateOctgnIds() {
+		emInitialize();
+
 		beginTransaction();
 
 		StringBuilder myLog = new StringBuilder();
 		Map<String, String> map = new HashMap<>();
-		final String crstOrCycleTechName = "planetfall-cycle";
+		final String crstOrCycleTechName = "navida-prime-cycle";
 
 		try {
 			DocumentBuilder db = DocumentBuilderFactory.newInstance().newDocumentBuilder();
-			Document doc = db.parse(DATA_BASE + "/octgn/04-" + crstOrCycleTechName + "/set.xml");
+			Document doc = db.parse(DATA_BASE + "/octgn/06-" + crstOrCycleTechName + "/set.xml");
 			NodeList cardNodes = doc.getElementsByTagName("card");
 			for (int i = 0; i < cardNodes.getLength(); i++) {
 				Element cardElem = (Element) cardNodes.item(i);
